@@ -49,6 +49,23 @@ class ProfileBenchmarkTests(unittest.TestCase):
         result = build_benchmark(post(99, 5000), self.history[:4])
         self.assertEqual(result.status, "INCONCLUSIVO")
 
+    def test_below_typical_is_detected_relative_to_profile(self):
+        result = build_benchmark(post(99, 500), self.history)
+        self.assertEqual(result.status, "ABAIXO_DO_TÍPICO")
+        self.assertLess(result.ratio_to_median or 1, 0.75)
+
+    def test_typical_post_is_not_called_a_failure(self):
+        result = build_benchmark(post(99, 1000), self.history)
+        self.assertEqual(result.status, "TÍPICO")
+
+    def test_paid_posts_do_not_contaminate_organic_baseline(self):
+        paid = [post(50 + index, 50000) for index in range(5)]
+        for item in paid:
+            item.is_paid = True
+        result = build_benchmark(post(99, 1000), self.history + paid)
+        self.assertEqual(result.comparable_posts, 10)
+        self.assertEqual(result.status, "TÍPICO")
+
     def test_same_lifecycle_is_preferred(self):
         mixed = self.history + [post(50 + i, 9000, age_hours=240) for i in range(5)]
         result = build_benchmark(post(99, 1000, age_hours=24), mixed)
