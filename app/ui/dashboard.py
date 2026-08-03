@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import statistics
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -84,6 +85,21 @@ def persist_uploads(files: list[Any]) -> list[Path]:
         destination.write_bytes(upload.getvalue())
         paths.append(destination)
     return paths
+
+
+def cleanup_runtime_artifacts(paths: list[Path], report_id: str | None = None) -> None:
+    """Remove private uploads and generated files when running in ephemeral cloud mode."""
+
+    inbox = settings.inbox_dir.resolve()
+    upload_dirs = {path.resolve().parent for path in paths}
+    for directory in upload_dirs:
+        if directory.parent == inbox and directory.name.startswith("upload_"):
+            shutil.rmtree(directory, ignore_errors=True)
+    if not report_id:
+        return
+    shutil.rmtree(settings.temp_dir / report_id, ignore_errors=True)
+    for suffix in (".json", ".md"):
+        (settings.exports_dir / f"{report_id}{suffix}").unlink(missing_ok=True)
 
 
 def fmt_number(value: float | int | None, suffix: str = "") -> str:
@@ -404,6 +420,8 @@ with analysis_tab:
         elif selection_error:
             st.error(selection_error)
         else:
+            paths: list[Path] = []
+            report: AnalysisEnvelope | None = None
             try:
                 paths = persist_uploads(list(media_uploads or []))
                 profile_history = profile_posts_from_csv(profile_file.getvalue()) if profile_file else []
@@ -453,6 +471,9 @@ with analysis_tab:
                 st.error(f"Não foi possível concluir a análise: {exc}")
                 with st.expander("Detalhes técnicos para diagnóstico"):
                     st.exception(exc)
+            finally:
+                if settings.ephemeral_mode:
+                    cleanup_runtime_artifacts(paths, report.report_id if report else None)
 
     if st.session_state.get("latest_report"):
         render_report(AnalysisEnvelope.model_validate(st.session_state["latest_report"]))
