@@ -137,6 +137,11 @@ def render_report(report: AnalysisEnvelope) -> None:
             "A IA configurada não participou desta resposta. O relatório abaixo é o fallback "
             "determinístico; abra “Falhas de provedores” no final para ver o motivo."
         )
+    elif report.provider == "deterministic":
+        st.info(
+            "Análise determinística concluída. Configure uma chave de IA para acrescentar "
+            "a leitura criativa multimodal."
+        )
     elif report.provider != "deterministic":
         mode = "multimodal" if report.technical_analysis.get("creative_content_summary") else "estruturada"
         st.success(f"Análise {mode} concluída por {report.provider.title()} ({report.model}).")
