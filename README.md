@@ -114,3 +114,17 @@ tests/              testes do núcleo e regressões
 python -m unittest discover -s tests -v
 python -m compileall -q app tests
 ```
+
+## Deploy privado gratuito
+
+O repositório inclui uma entrada enxuta para o Streamlit Community Cloud:
+
+- arquivo principal: `cloud/streamlit_app.py`;
+- Python: 3.12;
+- dependências de nuvem: `cloud/requirements.txt`;
+- dependência Linux: `packages.txt` (FFmpeg).
+
+No painel de Secrets do Streamlit, configure `GOOGLE_API_KEY` na raiz do TOML. A chave
+nunca deve entrar no GitHub. O modo de nuvem desativa o Whisper local para respeitar a
+memória gratuita e apaga uploads, frames e relatórios temporários depois que a resposta
+é guardada na sessão. Use os botões do painel para baixar o relatório que quiser manter.
