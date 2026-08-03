@@ -201,29 +201,52 @@ class AIStrategist:
             models.append("gemini-3.5-flash")
 
         client = genai.Client(api_key=self.settings.google_api_key)
+        request_text = SYSTEM_PROMPT + "\n\n" + prompt
         failures: list[str] = []
         try:
             for model in models:
                 try:
-                    parts = [types.Part.from_text(text=SYSTEM_PROMPT + "\n\n" + prompt)]
-                    parts.extend(
-                        types.Part.from_bytes(data=image, mime_type="image/jpeg") for image in images
+                    interaction = client.interactions.create(
+                        model=model,
+                        input=request_text,
+                        response_format={
+                            "type": "text",
+                            "mime_type": "application/json",
+                            "schema": _gemini_json_schema(),
+                        },
                     )
-                    response = client.models.generate_content(model=model, contents=parts)
-                    text = response.text or ""
-                    if not text.strip():
-                        raise ValueError("generateContent retornou uma resposta vazia")
-
-                    # Validate here so an invalid answer tries the fallback model
-                    # instead of abandoning Gemini altogether.
+                    text = interaction.output_text or ""
                     StrategicReport.model_validate(_extract_json(text))
                     return text, model
                 except Exception as exc:
-                    failures.append(f"{model}={type(exc).__name__}: {str(exc)[:180]}")
-                    logger.info("Gemini model attempt failed: %s", failures[-1])
+                    failures.append(f"interactions/{model}={type(exc).__name__}: {str(exc)[:160]}")
+
+                try:
+                    # JSON mode is intentionally schema-free here. It recovers from API
+                    # rejection of a deeply nested schema while the prompt and Pydantic
+                    # validation still enforce the complete contract locally.
+                    parts = [types.Part.from_text(text=request_text)]
+                    parts.extend(
+                        types.Part.from_bytes(data=image, mime_type="image/jpeg") for image in images
+                    )
+                    response = client.models.generate_content(
+                        model=model,
+                        contents=parts,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            max_output_tokens=min(self.settings.max_ai_output_tokens, 8192),
+                        ),
+                    )
+                    text = response.text or ""
+                    StrategicReport.model_validate(_extract_json(text))
+                    return text, model
+                except Exception as exc:
+                    failures.append(f"generate/{model}={type(exc).__name__}: {str(exc)[:160]}")
+
             raise RuntimeError("; ".join(failures))
         finally:
             client.close()
+
 
     def _call_openai(self, prompt: str, images: list[bytes]) -> tuple[str, str]:
         from openai import OpenAI
