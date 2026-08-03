@@ -1,9 +1,22 @@
 import unittest
 
-from app.ai.media_observer import MediaObservation
+from app.ai.media_observer import MediaObservation, observe_media
+from app.config import Settings
 
 
 class MediaObservationTests(unittest.TestCase):
+    def test_missing_gemini_key_is_supported_offline_mode(self):
+        observation, errors, model = observe_media(
+            settings=Settings(google_api_key=""),
+            images=[b"not-decoded-without-a-provider"],
+            technical={},
+            transcription="",
+        )
+
+        self.assertIsNone(observation)
+        self.assertEqual(errors, [])
+        self.assertEqual(model, "")
+
     def test_probability_style_confidence_is_normalized_to_percent(self):
         observation = MediaObservation.model_validate(
             {
