@@ -4,6 +4,7 @@ import io
 import os
 import tempfile
 import unittest
+from pathlib import Path
 
 from PIL import Image, ImageDraw
 from streamlit.testing.v1 import AppTest
@@ -16,12 +17,14 @@ class DashboardTests(unittest.TestCase):
         previous_data_dir = os.environ.get("DATA_DIR")
         previous_transcription = os.environ.get("ENABLE_TRANSCRIPTION")
         previous_collection = os.environ.get("ENABLE_PUBLIC_COLLECTION")
+        previous_ephemeral = os.environ.get("EPHEMERAL_MODE")
 
         try:
             with tempfile.TemporaryDirectory(prefix="viral-intel-ui-") as temp_dir:
                 os.environ["DATA_DIR"] = temp_dir
                 os.environ["ENABLE_TRANSCRIPTION"] = "false"
                 os.environ["ENABLE_PUBLIC_COLLECTION"] = "false"
+                os.environ["EPHEMERAL_MODE"] = "true"
                 get_settings.cache_clear()
 
                 image = Image.new("RGB", (720, 900), (243, 222, 208))
@@ -42,6 +45,8 @@ class DashboardTests(unittest.TestCase):
                 downloads = [item.label for item in app.get("download_button")]
                 self.assertIn("Baixar relatório completo (.json)", downloads)
                 self.assertIn("Baixar relatório para leitura (.md)", downloads)
+                self.assertEqual(list(Path(temp_dir).rglob("*.json")), [])
+                self.assertEqual(list(Path(temp_dir).glob("inbox/upload_*")), [])
         finally:
             if previous_data_dir is None:
                 os.environ.pop("DATA_DIR", None)
@@ -55,6 +60,10 @@ class DashboardTests(unittest.TestCase):
                 os.environ.pop("ENABLE_PUBLIC_COLLECTION", None)
             else:
                 os.environ["ENABLE_PUBLIC_COLLECTION"] = previous_collection
+            if previous_ephemeral is None:
+                os.environ.pop("EPHEMERAL_MODE", None)
+            else:
+                os.environ["EPHEMERAL_MODE"] = previous_ephemeral
             get_settings.cache_clear()
 
 
