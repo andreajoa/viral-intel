@@ -24,4 +24,10 @@ if [ "$VENV_VERSION" != "3.11" ] && [ "$VENV_VERSION" != "3.12" ]; then
 fi
 
 source .venv/bin/activate
-exec python -m streamlit run app/ui/dashboard.py --server.headless=false
+UPLOAD_LIMIT_MB="$(python -c 'from app.config import get_settings; print(get_settings().max_upload_mb)')"
+exec python -m streamlit run app/ui/dashboard.py \
+  --server.headless=false \
+  --server.address=127.0.0.1 \
+  --server.maxUploadSize="$UPLOAD_LIMIT_MB" \
+  --server.showEmailPrompt=false \
+  --browser.gatherUsageStats=false
