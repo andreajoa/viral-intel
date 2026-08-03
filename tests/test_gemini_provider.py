@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from app.ai.strategist import AIStrategist, _gemini_json_schema
 from app.config import Settings
+from app.models import BenchmarkResult, DataQuality, PostMetrics
 
 
 class _Part:
@@ -133,6 +134,85 @@ class GeminiProviderTests(unittest.TestCase):
 
         self.assertEqual(raw, VALID_REPORT)
         self.assertEqual(models_called, ["gemini-3.6-flash", "gemini-3.5-flash"])
+
+    def test_openai_adapter_uses_responses_structured_output(self):
+        captured = {}
+
+        class Responses:
+            @staticmethod
+            def create(**kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(output_text=VALID_REPORT)
+
+        client = SimpleNamespace(responses=Responses())
+        with tempfile.TemporaryDirectory() as temp, patch("openai.OpenAI", return_value=client):
+            root = Path(temp)
+            settings = Settings(
+                data_dir=root / "data",
+                local_media_dir=root / "media",
+                openai_api_key="configured-test-key",
+            )
+            raw, model = AIStrategist(settings=settings)._call_openai("prompt", [b"image"])
+
+        self.assertEqual(raw, VALID_REPORT)
+        self.assertEqual(model, settings.openai_model)
+        self.assertFalse(captured["store"])
+        self.assertEqual(captured["text"]["format"]["type"], "json_schema")
+        self.assertEqual(captured["input"][0]["content"][1]["type"], "input_image")
+
+    def test_anthropic_adapter_uses_structured_output(self):
+        captured = {}
+
+        class Messages:
+            @staticmethod
+            def create(**kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(content=[SimpleNamespace(type="text", text=VALID_REPORT)])
+
+        client = SimpleNamespace(messages=Messages())
+        with tempfile.TemporaryDirectory() as temp, patch("anthropic.Anthropic", return_value=client):
+            root = Path(temp)
+            settings = Settings(
+                data_dir=root / "data",
+                local_media_dir=root / "media",
+                anthropic_api_key="configured-test-key",
+            )
+            raw, model = AIStrategist(settings=settings)._call_anthropic("prompt", [b"image"])
+
+        self.assertEqual(raw, VALID_REPORT)
+        self.assertEqual(model, settings.anthropic_model)
+        self.assertEqual(captured["output_config"]["format"]["type"], "json_schema")
+        self.assertEqual(captured["messages"][0]["content"][0]["type"], "image")
+
+    def test_provider_failure_falls_through_to_next_configured_provider(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            settings = Settings(
+                data_dir=root / "data",
+                local_media_dir=root / "media",
+                google_api_key="gemini-test-key",
+                openai_api_key="openai-test-key",
+                provider_order=("gemini", "openai"),
+            )
+            strategist = AIStrategist(settings=settings)
+            with (
+                patch.object(strategist, "_call_gemini", side_effect=RuntimeError("temporary")),
+                patch.object(strategist, "_call_openai", return_value=(VALID_REPORT, "test-model")),
+            ):
+                report, provider, model, errors = strategist.analyze(
+                    metrics=PostMetrics(platform="instagram", format="image"),
+                    benchmark=BenchmarkResult(),
+                    quality=DataQuality(level="BAIXA", completeness_score=0),
+                    evidence=[],
+                    technical={},
+                    transcription="",
+                )
+
+        self.assertEqual(report.repeat_decision, "DADOS_INSUFICIENTES")
+        self.assertEqual(provider, "openai")
+        self.assertEqual(model, "test-model")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("gemini", errors[0])
 
 
 if __name__ == "__main__":
