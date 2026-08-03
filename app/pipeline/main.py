@@ -213,6 +213,11 @@ def analyze_content(
         niche=niche,
         images=inspection.get("frames") or [],
     )
+    if use_ai and media_observation and observation_model and provider == "deterministic":
+        # The visual Gemini pass succeeded even if the larger strategic pass needed
+        # the evidence-engine fallback. Preserve that work and report the real mode.
+        provider = "hybrid"
+        model = f"{observation_model} + {model}"
     provider_errors = observation_errors + provider_errors
 
     envelope = AnalysisEnvelope(
