@@ -8,13 +8,13 @@ converted to zero.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class Platform(str, Enum):
+class Platform(StrEnum):
     INSTAGRAM = "instagram"
     TIKTOK = "tiktok"
     YOUTUBE = "youtube"
@@ -22,7 +22,7 @@ class Platform(str, Enum):
     OTHER = "other"
 
 
-class ContentFormat(str, Enum):
+class ContentFormat(StrEnum):
     REEL = "reel"
     SHORT = "short"
     VIDEO = "video"
