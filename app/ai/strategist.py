@@ -247,7 +247,6 @@ class AIStrategist:
         finally:
             client.close()
 
-
     def _call_openai(self, prompt: str, images: list[bytes]) -> tuple[str, str]:
         from openai import OpenAI
 
@@ -313,6 +312,13 @@ def _ref_for(evidence: list[EvidenceItem], label_fragment: str) -> list[str]:
     return [item.id for item in evidence if fragment in item.label.lower()][:3]
 
 
+def _text_items(value: Any, limit: int = 6) -> list[str]:
+    """Normalize Gemini observations without leaking dict/list objects into prose."""
+
+    values = value if isinstance(value, list | tuple | set) else [value]
+    return [text for item in values if (text := str(item or "").strip())][:limit]
+
+
 def deterministic_strategy(
     metrics: PostMetrics,
     benchmark: BenchmarkResult,
@@ -327,6 +333,23 @@ def deterministic_strategy(
     technical_refs = [item.id for item in evidence if item.kind == "technical"][:4]
     observed_refs = [item.id for item in evidence if item.kind == "observed"][:5]
     missing_labels = [item.label for item in evidence if item.kind == "missing"]
+    creative_refs = [
+        item.id
+        for item in evidence
+        if item.kind == "technical" and item.label.lower().startswith("creative ")
+    ][:10]
+    creative_summary = str(technical.get("creative_content_summary") or "").strip()
+    primary_hook = str(technical.get("creative_primary_hook") or "").strip()
+    mechanisms = _text_items(technical.get("creative_hook_mechanisms"), 4)
+    promise = str(technical.get("creative_audience_promise") or "").strip()
+    tension = str(technical.get("creative_curiosity_or_tension") or "").strip()
+    observed_cta = str(technical.get("creative_cta_observed") or "").strip()
+    emotional_triggers = _text_items(technical.get("creative_emotional_triggers"), 4)
+    sequence = _text_items(technical.get("creative_sequence_or_progression"), 6)
+    if not sequence:
+        sequence = _text_items(technical.get("creative_visual_structure"), 6)
+    risks = _text_items(technical.get("creative_risks_or_ambiguities"), 3)
+    creative_available = bool(creative_summary or primary_hook or mechanisms)
 
     if benchmark.status == "BREAKOUT":
         decision = "REPETIR"
@@ -345,6 +368,8 @@ def deterministic_strategy(
         summary = (
             "Ainda não há histórico comparável suficiente para afirmar se o conteúdo viralizou ou fracassou."
         )
+    if creative_available:
+        summary += " A execução criativa foi analisada e já permite planejar o próximo teste."
 
     hypothesis = CausalHypothesis(
         title="Desempenho relativo ao padrão do perfil",
@@ -364,6 +389,34 @@ def deterministic_strategy(
         ),
     )
 
+    hypotheses = [hypothesis]
+    if creative_available:
+        mechanism_text = ", ".join(mechanisms) or "o gancho observado"
+        performance_known = benchmark.status != "INCONCLUSIVO"
+        hypotheses.append(
+            CausalHypothesis(
+                title="Mecanismo criativo candidato a explicar o resultado",
+                finding=(
+                    f"O conteúdo usa {mechanism_text}. Como o desempenho foi comparado com o "
+                    "histórico do perfil, esse mecanismo merece um teste de repetição controlado."
+                    if performance_known
+                    else f"O conteúdo usa {mechanism_text}, mas ainda faltam métricas e histórico "
+                    "para saber se esse mecanismo ajudou ou prejudicou a distribuição."
+                ),
+                evidence_refs=(creative_refs + benchmark_refs)[:8],
+                confidence=55 if performance_known else 20,
+                limitation=(
+                    "A presença do elemento criativo junto ao resultado é associação, não prova de causa."
+                ),
+                judgment="PLAUSÍVEL" if performance_known else "NÃO_AVALIÁVEL",
+                needed_to_confirm=[
+                    "Publicar variações mudando somente o gancho",
+                    "Comparar no mesmo estágio de vida do post",
+                    "Registrar alcance, salvamentos e compartilhamentos",
+                ],
+            )
+        )
+
     format_insights: list[GroundedInsight] = []
     if technical_refs:
         format_insights.append(
@@ -376,22 +429,149 @@ def deterministic_strategy(
             )
         )
 
-    experiment_metric = benchmark.primary_metric or ("views" if metrics.views is not None else "reach")
+    if creative_available:
+        creative_finding = creative_summary or "A mídia teve seus elementos criativos observados."
+        if primary_hook:
+            creative_finding += f" Gancho principal: “{primary_hook}”."
+        if mechanisms:
+            creative_finding += f" Mecanismos: {', '.join(mechanisms)}."
+        format_insights.insert(
+            0,
+            GroundedInsight(
+                title="Leitura do gancho e da estrutura",
+                finding=creative_finding,
+                evidence_refs=creative_refs[:8],
+                confidence=85,
+                limitation="A leitura visual descreve a execução; métricas são necessárias para medir o efeito.",
+            ),
+        )
+
+    audience_insights: list[GroundedInsight] = []
+    if promise or emotional_triggers:
+        audience_bits = []
+        if promise:
+            audience_bits.append(f"promessa percebida: {promise}")
+        if emotional_triggers:
+            audience_bits.append(f"gatilhos observados: {', '.join(emotional_triggers)}")
+        audience_insights.append(
+            GroundedInsight(
+                title="Promessa e reação pretendida",
+                finding="; ".join(audience_bits).capitalize() + ".",
+                evidence_refs=creative_refs[:8],
+                confidence=75,
+                limitation="A reação real do público exige comentários, retenção e métricas dos Insights.",
+            )
+        )
+
+    if benchmark.primary_metric:
+        experiment_metric = benchmark.primary_metric
+    elif metrics.format.value == "carousel":
+        experiment_metric = "salvamentos e compartilhamentos por alcance"
+    elif metrics.views is not None:
+        experiment_metric = "views"
+    else:
+        experiment_metric = "alcance e retenção inicial"
     comparison = (
         f"Superar a mediana de {benchmark.median_value:g} em {experiment_metric} no mesmo estágio de vida."
         if benchmark.median_value is not None
         else "Comparar no mesmo estágio de vida após reunir pelo menos 5 posts do mesmo formato."
     )
-    base_refs = benchmark_refs or observed_refs
+    base_refs = (benchmark_refs + observed_refs + creative_refs)[:8]
+
+    if creative_available:
+        hook_options = [
+            (
+                f"Recrie o padrão do gancho “{primary_hook[:120]}” com uma situação nova, "
+                "mantendo a mesma tensão."
+                if primary_hook
+                else "Abra com o mesmo mecanismo de tensão, aplicado a uma situação nova."
+            ),
+            (
+                f"Transforme a tensão “{tension[:120]}” em uma pergunta curta que exija continuar."
+                if tension
+                else "Antecipe uma consequência concreta e revele a explicação no slide seguinte."
+            ),
+        ]
+        structure = [
+            "1. Gancho: apresente a tensão ou contradição em uma única frase legível.",
+        ]
+        structure.extend(f"{index}. Progressão: {item}" for index, item in enumerate(sequence[:5], start=2))
+        if len(structure) < 2:
+            structure.append("2. Desenvolvimento: prove a promessa com uma cena ou exemplo específico.")
+        structure.append(f"{len(structure) + 1}. Fechamento: resolva a promessa e peça uma ação mensurável.")
+        preserve = ["formato e identidade visual"]
+        if mechanisms:
+            preserve.append("mecanismo do gancho: " + ", ".join(mechanisms[:3]))
+        if promise:
+            preserve.append("promessa central ao público")
+        change = ["uma única variável criativa por publicação"]
+        cta_missing = not observed_cta or observed_cta.lower() in {
+            "não identificado",
+            "nao identificado",
+            "nenhum",
+            "ausente",
+        }
+        if cta_missing:
+            change.insert(0, "incluir um CTA explícito ligado à métrica principal")
+        if risks:
+            change.append("eliminar a principal ambiguidade: " + risks[0])
+        objective = (
+            "Criar uma continuação reconhecível, mantendo o mecanismo criativo e mudando apenas a história."
+            if decision == "REPETIR"
+            else "Testar uma variação controlada do mecanismo observado e medir o efeito no perfil."
+        )
+        caption_direction = (
+            f"Conectar a tensão central ao nicho {niche or 'do perfil'}, sem repetir literalmente o post; "
+            "entregar a promessa no conteúdo e usar a legenda para contexto e ação."
+        )
+        cta = (
+            f"Preserve a intenção do CTA observado (“{observed_cta[:120]}”), mas formule uma ação "
+            "única e mensurável."
+            if not cta_missing
+            else "Use um único CTA mensurável: salvar para consultar, compartilhar com alguém ou comentar uma experiência."
+        )
+        experiment_hypothesis = (
+            f"O mecanismo {', '.join(mechanisms[:2])} sustenta melhor o interesse quando aplicado a uma nova história."
+            if mechanisms
+            else "O padrão do gancho observado sustenta melhor o interesse quando aplicado a uma nova história."
+        )
+    else:
+        hook_options = [
+            "Abra com a dor específica que o público reconhece em uma frase.",
+            "Abra com uma contradição concreta que será resolvida no conteúdo.",
+        ]
+        structure = [
+            "Gancho: promessa clara e específica.",
+            "Contexto: mostre rapidamente para quem é e por que importa.",
+            "Entrega: desenvolva uma ideia principal com exemplo concreto.",
+            "Fechamento: conclua a promessa e convide a uma ação coerente.",
+        ]
+        preserve = ["tema e público"] if decision in {"REPETIR", "ITERAR"} else ["público-alvo"]
+        change = ["uma única variável criativa por teste"]
+        objective = (
+            "Validar se a mesma promessa central sustenta o resultado com uma história diferente."
+            if decision in {"REPETIR", "ITERAR"}
+            else "Testar uma promessa mais clara sem alterar tema, duração e horário ao mesmo tempo."
+        )
+        caption_direction = f"Conectar o tema ao nicho {niche or 'informado pela pessoa usuária'}, sem acrescentar fatos não verificados."
+        cta = "Peça a resposta que mede o objetivo real do post, como salvar, compartilhar ou comentar uma experiência."
+        experiment_hypothesis = (
+            "Uma promessa mais clara nos primeiros segundos melhora a distribuição relativa."
+        )
 
     return StrategicReport(
         executive_summary=summary,
         performance_interpretation=(
             f"Confiança dos dados: {quality.level} ({quality.completeness_score}/100). "
-            "A classificação é relativa ao perfil; não representa uma regra universal da plataforma."
+            "A classificação é relativa ao perfil; não representa uma regra universal da plataforma. "
+            + (
+                "A leitura visual foi concluída e sustenta o diagnóstico de execução, mas não prova causa de distribuição."
+                if creative_available
+                else ""
+            )
         ),
         repeat_decision=decision,
-        root_cause_hypotheses=[hypothesis],
+        root_cause_hypotheses=hypotheses,
         format_insights=format_insights,
         profile_insights=[
             GroundedInsight(
@@ -402,33 +582,21 @@ def deterministic_strategy(
                 limitation="São recomendados 10 ou mais posts comparáveis.",
             )
         ],
-        audience_insights=[],
+        audience_insights=audience_insights,
         next_content=NextContentPlan(
             format=metrics.format.value,
-            objective=(
-                "Validar se a mesma promessa central sustenta o resultado com uma história diferente."
-                if decision in {"REPETIR", "ITERAR"}
-                else "Testar uma promessa mais clara sem alterar tema, duração e horário ao mesmo tempo."
-            ),
-            hook_options=[
-                "Abra com a dor específica que o público reconhece em uma frase.",
-                "Abra com uma contradição concreta que será resolvida no conteúdo.",
-            ],
-            structure=[
-                "Gancho: promessa clara e específica.",
-                "Contexto: mostre rapidamente para quem é e por que importa.",
-                "Entrega: desenvolva uma ideia principal com exemplo concreto.",
-                "Fechamento: conclua a promessa e convide a uma ação coerente.",
-            ],
-            caption_direction=f"Conectar o tema ao nicho {niche or 'informado pela pessoa usuária'}, sem acrescentar fatos não verificados.",
-            cta="Peça a resposta que mede o objetivo real do post, como salvar, compartilhar ou comentar uma experiência.",
-            preserve=["tema e público"] if decision in {"REPETIR", "ITERAR"} else ["público-alvo"],
-            change=["uma única variável criativa por teste"],
+            objective=objective,
+            hook_options=hook_options,
+            structure=structure[:12],
+            caption_direction=caption_direction,
+            cta=cta,
+            preserve=preserve,
+            change=change,
             based_on_refs=base_refs,
         ),
         experiments=[
             Experiment(
-                hypothesis="Uma promessa mais clara nos primeiros segundos melhora a distribuição relativa.",
+                hypothesis=experiment_hypothesis,
                 change_one_thing="Trocar apenas o gancho; manter tema, formato, duração e janela de publicação próximos.",
                 keep_constant=["tema", "formato", "duração aproximada", "janela de publicação"],
                 primary_metric=experiment_metric,
