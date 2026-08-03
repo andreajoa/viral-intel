@@ -33,6 +33,12 @@ jobs:
       - name: Verificar estilo e erros estaticos
         run: python -m ruff check app tests
 
+      - name: Verificar formatacao
+        run: python -m ruff format --check app tests
+
+      - name: Verificar dependencias
+        run: python -m pip check
+
       - name: Compilar modulos
         run: python -m compileall -q app tests
 
