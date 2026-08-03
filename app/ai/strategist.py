@@ -207,8 +207,7 @@ class AIStrategist:
                 try:
                     parts = [types.Part.from_text(text=SYSTEM_PROMPT + "\n\n" + prompt)]
                     parts.extend(
-                        types.Part.from_bytes(data=image, mime_type="image/jpeg")
-                        for image in images
+                        types.Part.from_bytes(data=image, mime_type="image/jpeg") for image in images
                     )
                     response = client.models.generate_content(model=model, contents=parts)
                     text = response.text or ""
