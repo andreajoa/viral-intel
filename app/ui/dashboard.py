@@ -148,7 +148,17 @@ def render_report(report: AnalysisEnvelope) -> None:
     st.markdown(f"### {strategy.executive_summary}")
     st.write(strategy.performance_interpretation)
     st.caption(f"Análise: {report.provider} · {report.model} · relatório {report.report_id}")
-    if report.provider == "deterministic" and report.provider_errors:
+    if report.provider == "hybrid":
+        st.success(
+            "Análise híbrida concluída: a Gemini fez a leitura criativa da mídia e o motor "
+            "de evidências protegeu a classificação estatística."
+        )
+        if report.provider_errors:
+            st.caption(
+                "A etapa extensa de redação da IA precisou da rota de recuperação, sem perder "
+                "a leitura visual nem transformar hipótese em fato."
+            )
+    elif report.provider == "deterministic" and report.provider_errors:
         st.error(
             "A IA configurada não participou desta resposta. O relatório abaixo é o fallback "
             "determinístico; abra “Falhas de provedores” no final para ver o motivo."
@@ -303,8 +313,11 @@ def render_report(report: AnalysisEnvelope) -> None:
         width="stretch",
     )
     if report.provider_errors:
-        with st.expander("Falhas de provedores e fallback aplicado"):
-            st.write("A análise determinística continuou funcionando. Detalhes:")
+        with st.expander("Detalhes técnicos da rota de recuperação"):
+            st.write(
+                "A análise foi concluída com segurança. Estes detalhes ajudam a diagnosticar "
+                "a etapa do provedor que precisou de recuperação:"
+            )
             for error in report.provider_errors:
                 st.code(error)
 
