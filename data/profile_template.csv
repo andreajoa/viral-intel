@@ -1,0 +1,2 @@
+platform,format,post_id,published_at,captured_at,followers,views,reach,impressions,likes,comments,shares,saves,follows,profile_visits,duration_seconds,average_watch_time_seconds,completion_rate,retention_3s_rate,average_view_percentage,non_follower_reach_rate,impressions_ctr,topic,hook_type,cta_type,is_paid
+instagram,reel,exemplo-01,2026-08-01T18:30:00-03:00,2026-08-02T18:30:00-03:00,14000,32000,25000,,1800,90,740,520,120,800,25,14.2,38,72,,,autismo,erro_comum,compartilhar,false
