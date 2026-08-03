@@ -1,0 +1,17 @@
+[project]
+name = "viral-intel"
+version = "2.1.0"
+description = "Evidence-first social content and profile intelligence"
+requires-python = ">=3.11,<3.13"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
