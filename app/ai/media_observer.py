@@ -43,9 +43,7 @@ class VisibleMetric(BaseModel):
 class MediaObservation(BaseModel):
     observed: bool = False
     asset_type: Literal["video", "carousel", "image", "social_screenshot", "unknown"] = "unknown"
-    format_hint: Literal["reel", "short", "video", "carousel", "image", "text", "unknown"] = (
-        "unknown"
-    )
+    format_hint: Literal["reel", "short", "video", "carousel", "image", "text", "unknown"] = "unknown"
     format_confidence: int = Field(default=0, ge=0, le=100)
     content_summary: str = ""
     visible_text: list[str] = Field(default_factory=list, max_length=30)
@@ -177,7 +175,8 @@ def observe_media(
     if not images:
         return None, [], ""
     if not settings.google_api_key:
-        return None, ["observação multimodal: Gemini não configurado"], ""
+        # Ausência de chave é um modo suportado, não uma falha do provedor.
+        return None, [], ""
 
     from google import genai
     from google.genai import types
@@ -191,8 +190,8 @@ def observe_media(
         "transcription": transcription or "INDISPONÍVEL",
         "images_sent": len(images),
     }
-    request_text = OBSERVATION_PROMPT + "\n\nCONTEXTO:\n" + json.dumps(
-        context, ensure_ascii=False, default=str
+    request_text = (
+        OBSERVATION_PROMPT + "\n\nCONTEXTO:\n" + json.dumps(context, ensure_ascii=False, default=str)
     )
     errors: list[str] = []
     client = genai.Client(api_key=settings.google_api_key)
@@ -200,9 +199,7 @@ def observe_media(
         for model in models:
             try:
                 parts = [types.Part.from_text(text=request_text)]
-                parts.extend(
-                    types.Part.from_bytes(data=image, mime_type="image/jpeg") for image in images
-                )
+                parts.extend(types.Part.from_bytes(data=image, mime_type="image/jpeg") for image in images)
                 response = client.models.generate_content(model=model, contents=parts)
                 observation = MediaObservation.model_validate(_extract_json(response.text or ""))
                 return observation, errors, model
