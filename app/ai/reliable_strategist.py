@@ -69,9 +69,7 @@ def _enrich_resonance(
 
     circulation_ratio = _find_evidence(evidence, "Circulação em relação aos comentários")
     circulation_per_likes = _find_evidence(evidence, "Ações de circulação por 100 curtidas")
-    composition_refs = [
-        item.id for item in (circulation_ratio, circulation_per_likes) if item is not None
-    ]
+    composition_refs = [item.id for item in (circulation_ratio, circulation_per_likes) if item is not None]
 
     if not creative_available and not composition_refs:
         return report
@@ -120,11 +118,7 @@ def _enrich_resonance(
     )
     report.root_cause_hypotheses = [
         resonance,
-        *[
-            item
-            for item in report.root_cause_hypotheses
-            if item.title.lower() != resonance.title.lower()
-        ],
+        *[item for item in report.root_cause_hypotheses if item.title.lower() != resonance.title.lower()],
     ][:5]
 
     if creative_available:
