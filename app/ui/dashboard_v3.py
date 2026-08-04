@@ -132,7 +132,9 @@ def format_warning(upload_names: list[str], selected_format: str | None) -> str 
         return None
     actual = media_kind([Path(name) for name in upload_names])
     if actual == "unknown":
-        return "A seleção mistura tipos de mídia ou contém mais de um vídeo. Envie um vídeo ou somente imagens."
+        return (
+            "A seleção mistura tipos de mídia ou contém mais de um vídeo. Envie um vídeo ou somente imagens."
+        )
     if selected_format in {"reel", "short", "video"} and actual == "image":
         return "Captura estática aceita: a leitura criativa funcionará, mas ritmo, áudio e cortes não poderão ser medidos."
     if selected_format == "carousel" and actual == "image":
@@ -168,9 +170,16 @@ def render_report(report: AnalysisEnvelope) -> None:
     }
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Decisão", labels.get(strategy.repeat_decision, strategy.repeat_decision))
-    c2.metric("Qualidade dos dados", f"{report.data_quality.level} · {report.data_quality.completeness_score}/100")
+    c2.metric(
+        "Qualidade dos dados", f"{report.data_quality.level} · {report.data_quality.completeness_score}/100"
+    )
     c3.metric("Posts comparáveis", report.benchmark.comparable_posts)
-    c4.metric("Vs. mediana", fmt_number(report.benchmark.ratio_to_median, "×") if report.benchmark.ratio_to_median is not None else "Inconclusivo")
+    c4.metric(
+        "Vs. mediana",
+        fmt_number(report.benchmark.ratio_to_median, "×")
+        if report.benchmark.ratio_to_median is not None
+        else "Inconclusivo",
+    )
 
     st.markdown(f"### {strategy.executive_summary}")
     st.write(strategy.performance_interpretation)
@@ -182,8 +191,14 @@ def render_report(report: AnalysisEnvelope) -> None:
         st.markdown("### O que foi realmente observado")
         st.write(creative)
         hook, cta = st.columns(2)
-        hook.info("**Gancho observado**\n\n" + str(report.technical_analysis.get("creative_primary_hook") or "Não identificado"))
-        cta.info("**CTA observado**\n\n" + str(report.technical_analysis.get("creative_cta_observed") or "Não identificado"))
+        hook.info(
+            "**Gancho observado**\n\n"
+            + str(report.technical_analysis.get("creative_primary_hook") or "Não identificado")
+        )
+        cta.info(
+            "**CTA observado**\n\n"
+            + str(report.technical_analysis.get("creative_cta_observed") or "Não identificado")
+        )
         mechanisms = report.technical_analysis.get("creative_hook_mechanisms") or []
         if mechanisms:
             st.write("**Mecanismos criativos:** " + " · ".join(map(str, mechanisms)))
@@ -255,7 +270,9 @@ def render_report(report: AnalysisEnvelope) -> None:
             st.json(report.technical_analysis)
 
     if report.data_quality.missing or report.metrics.source_notes:
-        with st.expander("O que falta para aumentar a precisão", expanded=report.data_quality.level == "BAIXA"):
+        with st.expander(
+            "O que falta para aumentar a precisão", expanded=report.data_quality.level == "BAIXA"
+        ):
             if report.data_quality.missing:
                 st.write("**Dados ausentes:** " + ", ".join(report.data_quality.missing))
             for limitation in report.data_quality.limitations:
@@ -263,15 +280,31 @@ def render_report(report: AnalysisEnvelope) -> None:
             for note in report.metrics.source_notes:
                 st.write(f"• {note}")
             if report.benchmark.comparable_posts < 5:
-                st.write("• Envie um CSV com pelo menos 10 posts do mesmo formato e no mesmo estágio de vida.")
+                st.write(
+                    "• Envie um CSV com pelo menos 10 posts do mesmo formato e no mesmo estágio de vida."
+                )
 
     d1, d2 = st.columns(2)
-    d1.download_button("Baixar relatório completo (.json)", report_json(report), file_name=f"{report.report_id}.json", mime="application/json", width="stretch")
-    d2.download_button("Baixar relatório para leitura (.md)", report_markdown(report), file_name=f"{report.report_id}.md", mime="text/markdown", width="stretch")
+    d1.download_button(
+        "Baixar relatório completo (.json)",
+        report_json(report),
+        file_name=f"{report.report_id}.json",
+        mime="application/json",
+        width="stretch",
+    )
+    d2.download_button(
+        "Baixar relatório para leitura (.md)",
+        report_markdown(report),
+        file_name=f"{report.report_id}.md",
+        mime="text/markdown",
+        width="stretch",
+    )
 
     if report.provider_errors:
         with st.expander("Diagnóstico técnico da recuperação"):
-            st.write("A análise foi preservada. Estes registros mostram as rotas de IA que precisaram de recuperação:")
+            st.write(
+                "A análise foi preservada. Estes registros mostram as rotas de IA que precisaram de recuperação:"
+            )
             for error in report.provider_errors:
                 st.code(error)
 
@@ -289,8 +322,16 @@ st.markdown(
 
 with st.sidebar:
     st.markdown("## Estado do sistema")
-    st.write(("●" if settings.google_api_key else "○") + " Gemini: " + ("configurada" if settings.google_api_key else "sem chave"))
-    st.write(("●" if shutil.which("ffmpeg") else "○") + " FFmpeg: " + ("disponível" if shutil.which("ffmpeg") else "indisponível"))
+    st.write(
+        ("●" if settings.google_api_key else "○")
+        + " Gemini: "
+        + ("configurada" if settings.google_api_key else "sem chave")
+    )
+    st.write(
+        ("●" if shutil.which("ffmpeg") else "○")
+        + " FFmpeg: "
+        + ("disponível" if shutil.which("ffmpeg") else "indisponível")
+    )
     st.write("● Motor de evidências: ativo")
     st.caption("A chave nunca é exibida nem gravada no relatório.")
     st.divider()
@@ -300,11 +341,15 @@ with st.sidebar:
 analysis_tab, profile_tab, method_tab = st.tabs(["Analisar conteúdo", "Histórico do perfil", "Como funciona"])
 
 with analysis_tab:
-    st.write("Use o arquivo original para a análise mais forte. Capturas e links também são aceitos, com os limites explicitados no relatório.")
+    st.write(
+        "Use o arquivo original para a análise mais forte. Capturas e links também são aceitos, com os limites explicitados no relatório."
+    )
     with st.form("analysis_form"):
         a, b = st.columns(2)
         platform_label = a.selectbox("Plataforma", ["Instagram", "TikTok", "YouTube", "Threads"])
-        format_label = b.selectbox("Formato", ["Detectar automaticamente", "Reel", "Short", "Vídeo", "Carrossel", "Imagem", "Texto"])
+        format_label = b.selectbox(
+            "Formato", ["Detectar automaticamente", "Reel", "Short", "Vídeo", "Carrossel", "Imagem", "Texto"]
+        )
         uploads = st.file_uploader(
             "Vídeo, imagem, captura ou slides",
             type=["mp4", "mov", "m4v", "webm", "mkv", "jpg", "jpeg", "png", "webp"],
@@ -312,8 +357,16 @@ with analysis_tab:
             help="Para carrossel, envie os slides na ordem correta. Para vídeo, prefira o arquivo original.",
         )
         url = st.text_input("Link público (opcional)", placeholder="https://www.instagram.com/reel/...")
-        niche = st.text_area("Nicho, público e objetivo", placeholder="Ex.: autismo e TDAH para pais; objetivo: compartilhamentos e autoridade.", height=90)
-        profile_file = st.file_uploader("Histórico do perfil em CSV (recomendado)", type=["csv"], help="Use pelo menos 10 posts comparáveis.")
+        niche = st.text_area(
+            "Nicho, público e objetivo",
+            placeholder="Ex.: autismo e TDAH para pais; objetivo: compartilhamentos e autoridade.",
+            height=90,
+        )
+        profile_file = st.file_uploader(
+            "Histórico do perfil em CSV (recomendado)",
+            type=["csv"],
+            help="Use pelo menos 10 posts comparáveis.",
+        )
 
         with st.expander("Contexto e métricas do Insights"):
             m1, m2, m3 = st.columns(3)
@@ -342,8 +395,21 @@ with analysis_tab:
                 nonfollowers = optional_number("Não seguidores (%)", "v3_nonfollowers")
         submitted = st.form_submit_button("Analisar agora", type="primary", width="stretch")
 
-    platform_map = {"Instagram": Platform.INSTAGRAM.value, "TikTok": Platform.TIKTOK.value, "YouTube": Platform.YOUTUBE.value, "Threads": Platform.THREADS.value}
-    format_map = {"Detectar automaticamente": None, "Reel": "reel", "Short": "short", "Vídeo": "video", "Carrossel": "carousel", "Imagem": "image", "Texto": "text"}
+    platform_map = {
+        "Instagram": Platform.INSTAGRAM.value,
+        "TikTok": Platform.TIKTOK.value,
+        "YouTube": Platform.YOUTUBE.value,
+        "Threads": Platform.THREADS.value,
+    }
+    format_map = {
+        "Detectar automaticamente": None,
+        "Reel": "reel",
+        "Short": "short",
+        "Vídeo": "video",
+        "Carrossel": "carousel",
+        "Imagem": "image",
+        "Texto": "text",
+    }
 
     if submitted:
         st.session_state.pop("latest_report_v3", None)
@@ -364,7 +430,9 @@ with analysis_tab:
                 paths = persist_uploads(list(uploads or []))
                 history = profile_posts_from_csv(profile_file.getvalue()) if profile_file else []
                 captured_at = datetime.now(UTC)
-                published_at = captured_at - timedelta(hours=float(age_hours)) if age_hours is not None else None
+                published_at = (
+                    captured_at - timedelta(hours=float(age_hours)) if age_hours is not None else None
+                )
                 manual = {
                     "captured_at": captured_at,
                     "published_at": published_at,
@@ -426,7 +494,15 @@ with profile_tab:
             for (platform_name, format_name), group in sorted(groups.items()):
                 views_values = [post.views for post in group if post.views is not None]
                 reach_values = [post.reach for post in group if post.reach is not None]
-                rows.append({"Plataforma": platform_name, "Formato": format_name, "Posts": len(group), "Mediana de views": statistics.median(views_values) if views_values else None, "Mediana de alcance": statistics.median(reach_values) if reach_values else None})
+                rows.append(
+                    {
+                        "Plataforma": platform_name,
+                        "Formato": format_name,
+                        "Posts": len(group),
+                        "Mediana de views": statistics.median(views_values) if views_values else None,
+                        "Mediana de alcance": statistics.median(reach_values) if reach_values else None,
+                    }
+                )
             st.dataframe(rows, width="stretch", hide_index=True)
             t1, t2, t3, t4 = st.tabs(["Temas", "Ganchos", "CTAs", "Top posts"])
             with t1:
@@ -448,10 +524,16 @@ with method_tab:
     left, right = st.columns(2)
     with left:
         st.markdown("#### Fatos e cálculos")
-        st.write("Métricas fornecidas, propriedades técnicas e fórmulas transparentes entram no ledger com IDs próprios.")
+        st.write(
+            "Métricas fornecidas, propriedades técnicas e fórmulas transparentes entram no ledger com IDs próprios."
+        )
         st.write("O post é comparado ao histórico compatível do próprio perfil.")
     with right:
         st.markdown("#### Hipóteses testáveis")
-        st.write("Gancho, emoção, edição e promessa recebem confiança, limite e dado necessário para confirmação.")
+        st.write(
+            "Gancho, emoção, edição e promessa recebem confiança, limite e dado necessário para confirmação."
+        )
         st.write("O sistema não afirma conhecer o código interno do algoritmo.")
-    st.info("A análise mais forte combina arquivo original, Insights privados e pelo menos 10 posts comparáveis.")
+    st.info(
+        "A análise mais forte combina arquivo original, Insights privados e pelo menos 10 posts comparáveis."
+    )

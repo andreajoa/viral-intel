@@ -109,8 +109,9 @@ class ReliableGeminiTests(unittest.TestCase):
                 return SimpleNamespace(text=VALID_OBSERVATION, parsed=None)
 
         client = SimpleNamespace(models=Models(), close=lambda: None)
-        with tempfile.TemporaryDirectory() as temp, patch.dict(
-            sys.modules, _fake_modules(client), clear=False
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            patch.dict(sys.modules, _fake_modules(client), clear=False),
         ):
             observation, errors, model = observe_media(
                 settings=self._settings(Path(temp)),
@@ -135,12 +136,13 @@ class ReliableGeminiTests(unittest.TestCase):
                 return SimpleNamespace(text=VALID_REPORT, parsed=None)
 
         client = SimpleNamespace(models=Models(), close=lambda: None)
-        with tempfile.TemporaryDirectory() as temp, patch.dict(
-            sys.modules, _fake_modules(client), clear=False
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            patch.dict(sys.modules, _fake_modules(client), clear=False),
         ):
-            raw, model = ReliableAIStrategist(
-                settings=self._settings(Path(temp))
-            )._call_gemini("prompt", [b"image"])
+            raw, model = ReliableAIStrategist(settings=self._settings(Path(temp)))._call_gemini(
+                "prompt", [b"image"]
+            )
 
         report = StrategicReport.model_validate_json(raw)
         self.assertEqual(report.repeat_decision, "DADOS_INSUFICIENTES")
