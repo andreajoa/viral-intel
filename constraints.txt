@@ -2,4 +2,4 @@
 # PyArrow 16.0.0 evita um segfault conhecido em macOS 11 Intel nas versões 16.1+.
 numpy==1.26.4
 pandas==2.2.3
-pyarrow==16.0.0
+pyarrow==25.0.0
