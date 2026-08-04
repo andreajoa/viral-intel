@@ -79,9 +79,7 @@ class ResonanceAnalysisTests(unittest.TestCase):
             any("Arquitetura criativa observada" == insight.title for insight in report.format_insights)
         )
         self.assertIn("Não interrompa a arte", report.next_content.cta)
-        self.assertTrue(
-            any("sem CTA intrusivo" in item for item in report.next_content.preserve)
-        )
+        self.assertTrue(any("sem CTA intrusivo" in item for item in report.next_content.preserve))
 
     def test_composition_metrics_do_not_require_views_or_reach(self):
         metrics = PostMetrics(
