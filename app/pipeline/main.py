@@ -7,8 +7,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from app.ai.media_observer import observe_media
-from app.ai.strategist import AIStrategist
+from app.ai.reliable_media_observer import observe_media
+from app.ai.reliable_strategist import ReliableAIStrategist
 from app.analysis.evidence import build_evidence
 from app.analysis.io import merge_metric_sources
 from app.analysis.metrics import assess_data_quality, derive_metrics
@@ -18,6 +18,8 @@ from app.media.inspector import MediaInspector, media_kind
 from app.models import AnalysisEnvelope, ContentFormat, Platform, PostMetrics
 from app.online.ytdlp_collector import YTDLPCollector
 from app.reporting.exporter import save_report
+
+AIStrategist = ReliableAIStrategist
 
 PLATFORM_ALIASES = {
     "instagram": Platform.INSTAGRAM,
@@ -64,6 +66,29 @@ def _format(
     return ContentFormat.UNKNOWN
 
 
+def _collect_public(url: str, settings: Settings) -> dict[str, Any]:
+    clean_url = url.strip()
+    if not clean_url:
+        return {}
+    if not settings.enable_public_collection:
+        return {
+            "source_ok": False,
+            "error": "A coleta pública está desativada neste ambiente.",
+        }
+    try:
+        result = YTDLPCollector(settings=settings).fetch_metadata(clean_url)
+        return (
+            result
+            if isinstance(result, dict)
+            else {"source_ok": False, "error": "Resposta pública inválida."}
+        )
+    except Exception as exc:
+        return {
+            "source_ok": False,
+            "error": f"{type(exc).__name__}: {str(exc)[:220]}",
+        }
+
+
 def validate_match(online_data: dict[str, Any], local_meta: dict[str, Any], kind: str) -> tuple[bool, str]:
     """Compatibility helper; duration is a clue, never proof of identity."""
     if kind == "video":
@@ -98,15 +123,12 @@ def analyze_content(
     job_dir = settings.temp_dir / report_id
     job_dir.mkdir(parents=True, exist_ok=True)
 
-    public: dict[str, Any] = {}
-    if url.strip():
-        public = YTDLPCollector(settings=settings).fetch_metadata(url.strip())
-
+    public = _collect_public(url, settings)
     paths = [Path(path).expanduser().resolve() for path in (media_paths or [])]
     detected_platform = _platform(platform, public)
     detected_format = _format(content_format, detected_platform, paths)
 
-    inspection = {
+    inspection: dict[str, Any] = {
         "kind": "none",
         "technical": {},
         "frames": [],
@@ -121,13 +143,27 @@ def analyze_content(
                 "Somente uma captura/capa do carrossel foi inspecionada; envie todos os slides "
                 "para avaliar progressão, entrega da promessa e fechamento."
             )
+        if (
+            detected_format in {ContentFormat.REEL, ContentFormat.SHORT, ContentFormat.VIDEO}
+            and inspection.get("kind") == "image"
+        ):
+            inspection.setdefault("warnings", []).append(
+                "Foi enviada uma captura estática de um vídeo. A análise criativa é parcial: "
+                "ritmo, cortes, áudio e retenção temporal não puderam ser medidos."
+            )
 
-    media_observation, observation_errors, observation_model = observe_media(
-        settings=settings,
-        images=inspection.get("frames") or [],
-        technical=inspection.get("technical") or {},
-        transcription=inspection.get("transcription") or "",
-    )
+    observation_errors: list[str] = []
+    observation_model = ""
+    media_observation = None
+    try:
+        media_observation, observation_errors, observation_model = observe_media(
+            settings=settings,
+            images=inspection.get("frames") or [],
+            technical=inspection.get("technical") or {},
+            transcription=inspection.get("transcription") or "",
+        )
+    except Exception as exc:
+        observation_errors = [f"observação multimodal: {type(exc).__name__}: {str(exc)[:240]}"]
 
     if (
         media_observation
@@ -214,8 +250,6 @@ def analyze_content(
         images=inspection.get("frames") or [],
     )
     if use_ai and media_observation and observation_model and provider == "deterministic":
-        # The visual Gemini pass succeeded even if the larger strategic pass needed
-        # the evidence-engine fallback. Preserve that work and report the real mode.
         provider = "hybrid"
         model = f"{observation_model} + {model}"
     provider_errors = observation_errors + provider_errors
