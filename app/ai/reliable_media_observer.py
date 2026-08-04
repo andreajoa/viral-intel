@@ -64,9 +64,7 @@ def observe_media(
         "images_sent": len(images),
     }
     request_text = (
-        OBSERVATION_PROMPT
-        + "\n\nCONTEXTO TÉCNICO:\n"
-        + json.dumps(context, ensure_ascii=False, default=str)
+        OBSERVATION_PROMPT + "\n\nCONTEXTO TÉCNICO:\n" + json.dumps(context, ensure_ascii=False, default=str)
     )
     contents: list[Any] = [request_text]
     contents.extend(types.Part.from_bytes(data=image, mime_type="image/jpeg") for image in images)
@@ -104,8 +102,7 @@ def observe_media(
                 return _parse_response(response), errors, model
             except Exception as json_exc:
                 errors.append(
-                    f"observação JSON {model}: "
-                    + _sanitize_error(json_exc, settings.google_api_key)
+                    f"observação JSON {model}: " + _sanitize_error(json_exc, settings.google_api_key)
                 )
 
         logger.warning("Gemini media observation failed after all recovery routes")
