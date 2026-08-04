@@ -237,9 +237,7 @@ def analyze_content(
     evidence = build_evidence(metrics, derived, benchmark, quality, technical_context)
 
     strategist = (
-        AIStrategist(settings=settings)
-        if use_ai
-        else AIStrategist(provider="disabled", settings=settings)
+        AIStrategist(settings=settings) if use_ai else AIStrategist(provider="disabled", settings=settings)
     )
     strategy, provider, model, provider_errors = strategist.analyze(
         metrics=metrics,
