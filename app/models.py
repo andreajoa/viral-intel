@@ -1,7 +1,7 @@
 """Typed domain models used across Viral Intel.
 
 The project deliberately distinguishes observed values, deterministic calculations,
-and hypotheses.  A missing metric is represented by ``None``; it is never silently
+and hypotheses. A missing metric is represented by ``None``; it is never silently
 converted to zero.
 """
 
@@ -37,7 +37,9 @@ PERCENT_FIELDS = {
     "retention_3s_rate",
     "average_view_percentage",
     "non_follower_reach_rate",
+    "engaged_non_follower_rate",
     "impressions_ctr",
+    "skip_rate",
 }
 
 COUNT_FIELDS = {
@@ -52,7 +54,16 @@ COUNT_FIELDS = {
     "reposts",
     "follows",
     "profile_visits",
+    "profile_activity",
     "total_interactions",
+    "accounts_engaged",
+    "followers_reach",
+    "non_followers_reach",
+    "home_impressions",
+    "explore_impressions",
+    "profile_impressions",
+    "hashtag_impressions",
+    "replays",
 }
 
 
@@ -76,6 +87,8 @@ class PostMetrics(BaseModel):
     published_at: datetime | None = None
     captured_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     is_paid: bool = False
+    is_original: bool | None = None
+    recommendation_eligibility: Literal["eligible", "not_eligible", "unknown"] = "unknown"
 
     followers: int | None = None
     views: int | None = None
@@ -88,7 +101,16 @@ class PostMetrics(BaseModel):
     reposts: int | None = None
     follows: int | None = None
     profile_visits: int | None = None
+    profile_activity: int | None = None
     total_interactions: int | None = None
+    accounts_engaged: int | None = None
+
+    followers_reach: int | None = None
+    non_followers_reach: int | None = None
+    home_impressions: int | None = None
+    explore_impressions: int | None = None
+    profile_impressions: int | None = None
+    hashtag_impressions: int | None = None
 
     duration_seconds: float | None = None
     average_watch_time_seconds: float | None = None
@@ -96,9 +118,19 @@ class PostMetrics(BaseModel):
     retention_3s_rate: float | None = None
     average_view_percentage: float | None = None
     non_follower_reach_rate: float | None = None
+    engaged_non_follower_rate: float | None = None
     impressions_ctr: float | None = None
+    replays: int | None = None
+    skip_rate: float | None = None
 
-    source: Literal["manual", "public", "mixed", "profile_csv", "screenshot"] = "manual"
+    source: Literal[
+        "manual",
+        "public",
+        "official_api",
+        "mixed",
+        "profile_csv",
+        "screenshot",
+    ] = "manual"
     source_notes: list[str] = Field(default_factory=list)
 
     @field_validator(*sorted(COUNT_FIELDS))
@@ -179,7 +211,7 @@ class BenchmarkResult(BaseModel):
 class AnalysisEnvelope(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    schema_version: str = "2.0"
+    schema_version: str = "3.0"
     report_id: str
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metrics: PostMetrics
@@ -191,5 +223,5 @@ class AnalysisEnvelope(BaseModel):
     transcription: str = ""
     strategy: dict[str, Any] = Field(default_factory=dict)
     provider: str = "deterministic"
-    model: str = "evidence-engine-v2"
+    model: str = "evidence-engine-v3"
     provider_errors: list[str] = Field(default_factory=list)
