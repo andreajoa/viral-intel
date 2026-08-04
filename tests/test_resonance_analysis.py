@@ -36,6 +36,13 @@ class ResonanceAnalysisTests(unittest.TestCase):
             "creative_curiosity_or_tension": (
                 "A frase começa minimizando a perda e termina tornando a pessoa insubstituível."
             ),
+            "creative_style_signals": [
+                "escrita à mão",
+                "caderno pautado",
+                "marcas semelhantes a lágrimas",
+            ],
+            "creative_visual_structure": ["texto central", "fundo simples", "leitura imediata"],
+            "creative_cta_observed": "ausente",
         }
         evidence = build_evidence(metrics, derived, benchmark, quality, technical)
 
@@ -60,6 +67,8 @@ class ResonanceAnalysisTests(unittest.TestCase):
                 hypothesis.judgment == "PLAUSÍVEL"
                 and "Ressonância emocional" in hypothesis.title
                 and "redistribuição" in hypothesis.finding
+                and "aparência íntima" in hypothesis.finding
+                and "mensagem pronta" in hypothesis.finding
                 for hypothesis in report.root_cause_hypotheses
             )
         )
@@ -68,6 +77,10 @@ class ResonanceAnalysisTests(unittest.TestCase):
         )
         self.assertTrue(
             any("Arquitetura criativa observada" == insight.title for insight in report.format_insights)
+        )
+        self.assertIn("Não interrompa a arte", report.next_content.cta)
+        self.assertTrue(
+            any("sem CTA intrusivo" in item for item in report.next_content.preserve)
         )
 
     def test_composition_metrics_do_not_require_views_or_reach(self):
