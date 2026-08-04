@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from app.ai.media_observer import MediaObservation, OBSERVATION_PROMPT
+from app.ai.media_observer import OBSERVATION_PROMPT, MediaObservation
 from app.ai.strategist import _extract_json
 from app.config import Settings
 
