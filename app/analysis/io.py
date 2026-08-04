@@ -1,8 +1,9 @@
-"""Input helpers for profile-history CSV files and public/manual metric merging."""
+"""Input helpers for profile-history CSV files and metric/comment merging."""
 
 from __future__ import annotations
 
 import csv
+import json
 from datetime import UTC, datetime
 from io import StringIO
 from typing import Any
@@ -21,14 +22,25 @@ NUMERIC_FIELDS = {
     "reposts",
     "follows",
     "profile_visits",
+    "profile_activity",
     "total_interactions",
+    "accounts_engaged",
+    "followers_reach",
+    "non_followers_reach",
+    "home_impressions",
+    "explore_impressions",
+    "profile_impressions",
+    "hashtag_impressions",
     "duration_seconds",
     "average_watch_time_seconds",
     "completion_rate",
     "retention_3s_rate",
     "average_view_percentage",
     "non_follower_reach_rate",
+    "engaged_non_follower_rate",
     "impressions_ctr",
+    "replays",
+    "skip_rate",
 }
 
 
@@ -82,13 +94,60 @@ def profile_posts_from_csv(raw: bytes | str) -> list[PostMetrics]:
     return posts
 
 
+def comments_from_file(raw: bytes | str, filename: str = "") -> list[dict[str, Any]]:
+    """Parse user-authorized comment exports in CSV or JSON format."""
+
+    text = raw.decode("utf-8-sig") if isinstance(raw, bytes) else raw
+    lowered = filename.lower()
+    if lowered.endswith(".json") or text.lstrip().startswith(("[", "{")):
+        payload = json.loads(text)
+        if isinstance(payload, dict):
+            payload = payload.get("comments") or payload.get("data") or []
+        if not isinstance(payload, list):
+            raise ValueError("O JSON de comentários precisa conter uma lista ou a chave comments/data.")
+        return [row for row in payload if isinstance(row, dict)]
+
+    rows: list[dict[str, Any]] = []
+    for row in csv.DictReader(StringIO(text)):
+        if not row:
+            continue
+        lowered_row = {str(key or "").strip().lower(): value for key, value in row.items()}
+        comment = {
+            "id": lowered_row.get("id") or lowered_row.get("comment_id"),
+            "author": (
+                lowered_row.get("author")
+                or lowered_row.get("username")
+                or lowered_row.get("user")
+                or lowered_row.get("from")
+            ),
+            "text": (
+                lowered_row.get("text")
+                or lowered_row.get("comment")
+                or lowered_row.get("comentario")
+                or lowered_row.get("comentário")
+            ),
+            "likes": parse_optional_number(
+                lowered_row.get("likes") or lowered_row.get("like_count")
+            ),
+            "timestamp": lowered_row.get("timestamp") or lowered_row.get("published_at"),
+        }
+        if comment["text"]:
+            rows.append(comment)
+    return rows
+
+
+def _source_for(public: dict[str, Any]) -> str:
+    collection = str(public.get("collection_source") or "")
+    return "official_api" if collection.startswith("meta/") else "public"
+
+
 def merge_metric_sources(
     platform: Platform | str,
     content_format: ContentFormat | str,
     manual: dict[str, Any] | PostMetrics | None,
     public: dict[str, Any] | None,
 ) -> PostMetrics:
-    """Merge public metadata with manual Insights; manual values always win."""
+    """Merge collected metadata with manual Insights; manual values always win."""
 
     public = public or {}
     base: dict[str, Any] = {
@@ -96,17 +155,28 @@ def merge_metric_sources(
         "format": content_format,
         "post_id": public.get("post_id"),
         "post_url": public.get("webpage_url"),
-        "title": public.get("title"),
+        "title": public.get("title") or public.get("caption"),
         "published_at": public.get("published_at"),
         "followers": public.get("followers"),
         "views": public.get("views"),
+        "reach": public.get("reach"),
+        "impressions": public.get("impressions"),
         "likes": public.get("likes"),
         "comments": public.get("comments_count"),
         "shares": public.get("shares"),
+        "saves": public.get("saves"),
         "reposts": public.get("reposts"),
+        "follows": public.get("follows"),
+        "profile_visits": public.get("profile_visits"),
+        "profile_activity": public.get("profile_activity"),
+        "total_interactions": public.get("total_interactions"),
+        "accounts_engaged": public.get("accounts_engaged"),
         "duration_seconds": public.get("duration_seconds"),
-        "source": "public" if public else "manual",
-        "source_notes": public.get("source_notes") or [],
+        "average_watch_time_seconds": public.get("average_watch_time_seconds"),
+        "replays": public.get("replays"),
+        "skip_rate": public.get("skip_rate"),
+        "source": _source_for(public) if public else "manual",
+        "source_notes": list(public.get("source_notes") or []),
     }
     if isinstance(manual, PostMetrics):
         manual_data = manual.model_dump(exclude_none=True)
@@ -120,6 +190,6 @@ def merge_metric_sources(
     if public and manual_data:
         base["source"] = "mixed"
         base.setdefault("source_notes", []).append(
-            "Métricas digitadas manualmente têm prioridade sobre dados públicos."
+            "Métricas digitadas manualmente têm prioridade sobre dados coletados."
         )
     return PostMetrics.model_validate(base)
