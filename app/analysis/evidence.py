@@ -29,6 +29,26 @@ RAW_LABELS = {
 
 DERIVED_LABELS = {
     "interactions_known": ("Interações conhecidas", "contagem", "soma apenas das interações fornecidas"),
+    "circulation_actions_known": (
+        "Ações de circulação conhecidas",
+        "contagem",
+        "soma apenas de compartilhamentos e reposts fornecidos",
+    ),
+    "circulation_to_likes_pct": (
+        "Ações de circulação por 100 curtidas",
+        "%",
+        "ações de circulação conhecidas ÷ curtidas × 100",
+    ),
+    "comments_to_likes_pct": (
+        "Comentários por 100 curtidas",
+        "%",
+        "comentários ÷ curtidas × 100",
+    ),
+    "circulation_to_comments_ratio": (
+        "Circulação em relação aos comentários",
+        "× comentários",
+        "ações de circulação conhecidas ÷ comentários",
+    ),
     "engagement_by_views_pct": (
         "Engajamento por visualizações",
         "%",

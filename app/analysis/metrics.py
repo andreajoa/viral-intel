@@ -21,7 +21,9 @@ def _sum_known(values: Iterable[int | None]) -> int | None:
 def derive_metrics(metrics: PostMetrics) -> dict[str, float]:
     """Calculate only values supported by the supplied snapshot.
 
-    No absent metric is treated as zero.  Rates are returned as percentages.
+    No absent metric is treated as zero. Rates are returned as percentages. Ratios
+    between visible interaction types describe the composition of this post only;
+    they are not universal performance thresholds.
     """
 
     interactions = metrics.total_interactions
@@ -29,10 +31,25 @@ def derive_metrics(metrics: PostMetrics) -> dict[str, float]:
         interactions = _sum_known(
             [metrics.likes, metrics.comments, metrics.shares, metrics.saves, metrics.reposts]
         )
+    circulation_actions = _sum_known([metrics.shares, metrics.reposts])
 
     results: dict[str, float] = {}
     candidates = {
         "interactions_known": float(interactions) if interactions is not None else None,
+        "circulation_actions_known": (
+            float(circulation_actions) if circulation_actions is not None else None
+        ),
+        "circulation_to_likes_pct": (
+            _ratio(circulation_actions, metrics.likes) * 100
+            if _ratio(circulation_actions, metrics.likes) is not None
+            else None
+        ),
+        "comments_to_likes_pct": (
+            _ratio(metrics.comments, metrics.likes) * 100
+            if _ratio(metrics.comments, metrics.likes) is not None
+            else None
+        ),
+        "circulation_to_comments_ratio": _ratio(circulation_actions, metrics.comments),
         "engagement_by_views_pct": (
             _ratio(interactions, metrics.views) * 100
             if _ratio(interactions, metrics.views) is not None
