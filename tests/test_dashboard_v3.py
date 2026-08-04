@@ -11,6 +11,7 @@ from streamlit.testing.v1 import AppTest
 
 from app.config import get_settings
 
+ROOT = Path(__file__).resolve().parents[1]
 _ENV_KEYS = (
     "DATA_DIR",
     "ENABLE_TRANSCRIPTION",
@@ -52,7 +53,7 @@ class DashboardV3Tests(unittest.TestCase):
                 image.save(content, "PNG")
 
                 app = AppTest.from_file(
-                    "app/ui/dashboard_v3.py",
+                    str(ROOT / "app" / "ui" / "dashboard_v3.py"),
                     default_timeout=50,
                 ).run()
                 self.assertEqual(len(app.exception), 0)
