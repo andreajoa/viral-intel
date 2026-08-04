@@ -4,9 +4,9 @@ import os
 import tempfile
 import unittest
 
-from app.config import get_settings
 from streamlit.testing.v1 import AppTest
 
+from app.config import get_settings
 
 _ENV_KEYS = (
     "DATA_DIR",
