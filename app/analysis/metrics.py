@@ -13,6 +13,11 @@ def _ratio(numerator: float | int | None, denominator: float | int | None) -> fl
     return float(numerator) / float(denominator)
 
 
+def _percent(numerator: float | int | None, denominator: float | int | None) -> float | None:
+    ratio = _ratio(numerator, denominator)
+    return ratio * 100 if ratio is not None else None
+
+
 def _sum_known(values: Iterable[int | None]) -> int | None:
     present = [value for value in values if value is not None]
     return sum(present) if present else None
@@ -22,8 +27,8 @@ def derive_metrics(metrics: PostMetrics) -> dict[str, float]:
     """Calculate only values supported by the supplied snapshot.
 
     No absent metric is treated as zero. Rates are returned as percentages. Ratios
-    between visible interaction types describe the composition of this post only;
-    they are not universal performance thresholds.
+    between interaction types describe the composition of this post only; they are not
+    universal performance thresholds or the private ranking weights used by a platform.
     """
 
     interactions = metrics.total_interactions
@@ -39,66 +44,45 @@ def derive_metrics(metrics: PostMetrics) -> dict[str, float]:
         "circulation_actions_known": (
             float(circulation_actions) if circulation_actions is not None else None
         ),
-        "circulation_to_likes_pct": (
-            _ratio(circulation_actions, metrics.likes) * 100
-            if _ratio(circulation_actions, metrics.likes) is not None
-            else None
-        ),
-        "comments_to_likes_pct": (
-            _ratio(metrics.comments, metrics.likes) * 100
-            if _ratio(metrics.comments, metrics.likes) is not None
-            else None
-        ),
+        "circulation_to_likes_pct": _percent(circulation_actions, metrics.likes),
+        "comments_to_likes_pct": _percent(metrics.comments, metrics.likes),
         "circulation_to_comments_ratio": _ratio(circulation_actions, metrics.comments),
-        "engagement_by_views_pct": (
-            _ratio(interactions, metrics.views) * 100
-            if _ratio(interactions, metrics.views) is not None
-            else None
-        ),
-        "engagement_by_reach_pct": (
-            _ratio(interactions, metrics.reach) * 100
-            if _ratio(interactions, metrics.reach) is not None
-            else None
-        ),
-        "views_per_follower_pct": (
-            _ratio(metrics.views, metrics.followers) * 100
-            if _ratio(metrics.views, metrics.followers) is not None
-            else None
-        ),
-        "reach_per_follower_pct": (
-            _ratio(metrics.reach, metrics.followers) * 100
-            if _ratio(metrics.reach, metrics.followers) is not None
-            else None
-        ),
-        "like_rate_by_views_pct": (
-            _ratio(metrics.likes, metrics.views) * 100
-            if _ratio(metrics.likes, metrics.views) is not None
-            else None
-        ),
-        "comment_rate_by_views_pct": (
-            _ratio(metrics.comments, metrics.views) * 100
-            if _ratio(metrics.comments, metrics.views) is not None
-            else None
-        ),
-        "share_rate_by_views_pct": (
-            _ratio(metrics.shares, metrics.views) * 100
-            if _ratio(metrics.shares, metrics.views) is not None
-            else None
-        ),
-        "save_rate_by_views_pct": (
-            _ratio(metrics.saves, metrics.views) * 100
-            if _ratio(metrics.saves, metrics.views) is not None
-            else None
-        ),
-        "follow_conversion_by_reach_pct": (
-            _ratio(metrics.follows, metrics.reach) * 100
+        "engagement_by_views_pct": _percent(interactions, metrics.views),
+        "engagement_by_reach_pct": _percent(interactions, metrics.reach),
+        "accounts_engaged_by_reach_pct": _percent(metrics.accounts_engaged, metrics.reach),
+        "views_per_follower_pct": _percent(metrics.views, metrics.followers),
+        "reach_per_follower_pct": _percent(metrics.reach, metrics.followers),
+        "impressions_per_reached_account": _ratio(metrics.impressions, metrics.reach),
+        "like_rate_by_views_pct": _percent(metrics.likes, metrics.views),
+        "like_rate_by_reach_pct": _percent(metrics.likes, metrics.reach),
+        "comment_rate_by_views_pct": _percent(metrics.comments, metrics.views),
+        "comment_rate_by_reach_pct": _percent(metrics.comments, metrics.reach),
+        "share_rate_by_views_pct": _percent(metrics.shares, metrics.views),
+        "share_rate_by_reach_pct": _percent(metrics.shares, metrics.reach),
+        "save_rate_by_views_pct": _percent(metrics.saves, metrics.views),
+        "save_rate_by_reach_pct": _percent(metrics.saves, metrics.reach),
+        "replay_rate_by_views_pct": _percent(metrics.replays, metrics.views),
+        "follow_conversion_by_reach_pct": _percent(metrics.follows, metrics.reach),
+        "follows_per_1000_reached": (
+            _ratio(metrics.follows, metrics.reach) * 1000
             if _ratio(metrics.follows, metrics.reach) is not None
             else None
         ),
-        "profile_visit_conversion_pct": (
-            _ratio(metrics.follows, metrics.profile_visits) * 100
-            if _ratio(metrics.follows, metrics.profile_visits) is not None
-            else None
+        "profile_visit_rate_by_reach_pct": _percent(metrics.profile_visits, metrics.reach),
+        "profile_visit_conversion_pct": _percent(metrics.follows, metrics.profile_visits),
+        "non_follower_reach_calculated_pct": _percent(
+            metrics.non_followers_reach, metrics.reach
+        ),
+        "followers_reach_calculated_pct": _percent(metrics.followers_reach, metrics.reach),
+        "home_impressions_share_pct": _percent(metrics.home_impressions, metrics.impressions),
+        "explore_impressions_share_pct": _percent(
+            metrics.explore_impressions, metrics.impressions
+        ),
+        "profile_impressions_share_pct": _percent(
+            metrics.profile_impressions, metrics.impressions
+        ),
+        "hashtag_impressions_share_pct": _percent(
+            metrics.hashtag_impressions, metrics.impressions
         ),
     }
 
@@ -111,6 +95,9 @@ def derive_metrics(metrics: PostMetrics) -> dict[str, float]:
     if metrics.age_hours not in (None, 0):
         candidates["average_views_per_hour_since_publish"] = _ratio(metrics.views, metrics.age_hours)
         candidates["average_reach_per_hour_since_publish"] = _ratio(metrics.reach, metrics.age_hours)
+        candidates["average_shares_per_hour_since_publish"] = _ratio(
+            metrics.shares, metrics.age_hours
+        )
 
     for key, value in candidates.items():
         if value is not None:
@@ -124,7 +111,14 @@ def _required_fields(metrics: PostMetrics) -> tuple[list[str], list[str]]:
 
     if metrics.platform == Platform.INSTAGRAM:
         common += ["reach", "saves"]
-        depth = ["average_watch_time_seconds", "completion_rate", "non_follower_reach_rate", "follows"]
+        depth = [
+            "non_follower_reach_rate",
+            "follows",
+            "profile_visits",
+            "accounts_engaged",
+        ]
+        if metrics.format in {ContentFormat.REEL, ContentFormat.VIDEO}:
+            depth += ["average_watch_time_seconds", "completion_rate"]
     elif metrics.platform == Platform.TIKTOK:
         common += ["saves"]
         depth = ["average_watch_time_seconds", "completion_rate", "retention_3s_rate", "follows"]
@@ -168,6 +162,10 @@ def assess_data_quality(metrics: PostMetrics, comparable_posts: int) -> DataQual
         limitations.append("Sem data de publicação, não é possível controlar o estágio de vida do post.")
     if metrics.source == "public":
         limitations.append("Dados públicos não incluem todas as métricas privadas de Insights.")
+    if metrics.source == "official_api":
+        limitations.append(
+            "A API oficial entrega métricas agregadas, mas não os pesos do ranking nem identidades de quem compartilhou, salvou ou curtiu."
+        )
     if metrics.source in {"screenshot", "mixed"} and any(
         "captura" in note.lower() for note in metrics.source_notes
     ):
@@ -176,7 +174,11 @@ def assess_data_quality(metrics: PostMetrics, comparable_posts: int) -> DataQual
         )
     if not any(getattr(metrics, name, None) is not None for name in depth):
         limitations.append(
-            "Sem métricas de profundidade, a retenção ou a qualidade da interação não pode ser confirmada."
+            "Sem métricas de profundidade, expansão e conversão, a trajetória de distribuição não pode ser reconstruída."
+        )
+    if metrics.platform == Platform.INSTAGRAM and metrics.non_follower_reach_rate is None:
+        limitations.append(
+            "Sem alcance de não seguidores, não é possível confirmar a expansão para além da base."
         )
 
     return DataQuality(
