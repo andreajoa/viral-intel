@@ -1,27 +1,19 @@
-name: Format production branch
+name: Manual formatting check
 
 on:
-  push:
-    branches: [agent/production-hardening]
+  workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: format-production-hardening
-  cancel-in-progress: true
+  contents: read
 
 jobs:
-  format:
-    if: github.actor != 'github-actions[bot]'
+  format-check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
       - name: Baixar codigo
         uses: actions/checkout@v6
-        with:
-          ref: agent/production-hardening
 
       - name: Configurar Python
         uses: actions/setup-python@v6
@@ -31,17 +23,5 @@ jobs:
       - name: Instalar Ruff
         run: python -m pip install "ruff==0.16.1"
 
-      - name: Formatar arquivos
-        run: python -m ruff format app cloud tests
-
-      - name: Publicar formatacao
-        run: |
-          if git diff --quiet; then
-            echo "Nenhuma mudança necessária."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app cloud tests
-          git commit -m "style: apply Ruff formatting"
-          git push origin HEAD:agent/production-hardening
+      - name: Verificar formatacao
+        run: python -m ruff format --check app cloud tests
