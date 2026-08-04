@@ -19,6 +19,8 @@ from app.models import AnalysisEnvelope, ContentFormat, Platform, PostMetrics
 from app.online.ytdlp_collector import YTDLPCollector
 from app.reporting.exporter import save_report
 
+AIStrategist = ReliableAIStrategist
+
 PLATFORM_ALIASES = {
     "instagram": Platform.INSTAGRAM,
     "instagramstories": Platform.INSTAGRAM,
@@ -235,9 +237,9 @@ def analyze_content(
     evidence = build_evidence(metrics, derived, benchmark, quality, technical_context)
 
     strategist = (
-        ReliableAIStrategist(settings=settings)
+        AIStrategist(settings=settings)
         if use_ai
-        else ReliableAIStrategist(provider="disabled", settings=settings)
+        else AIStrategist(provider="disabled", settings=settings)
     )
     strategy, provider, model, provider_errors = strategist.analyze(
         metrics=metrics,
