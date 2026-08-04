@@ -18,13 +18,24 @@ RAW_LABELS = {
     "reposts": ("Reposts", "contagem"),
     "follows": ("Novos seguidores atribuídos", "contagem"),
     "profile_visits": ("Visitas ao perfil", "contagem"),
+    "profile_activity": ("Atividade no perfil atribuída", "contagem"),
+    "accounts_engaged": ("Contas engajadas", "contagem"),
+    "followers_reach": ("Alcance de seguidores", "contagem"),
+    "non_followers_reach": ("Alcance de não seguidores", "contagem"),
+    "home_impressions": ("Impressões no Feed/Home", "contagem"),
+    "explore_impressions": ("Impressões no Explorar", "contagem"),
+    "profile_impressions": ("Impressões originadas no perfil", "contagem"),
+    "hashtag_impressions": ("Impressões por hashtags", "contagem"),
     "duration_seconds": ("Duração", "segundos"),
     "average_watch_time_seconds": ("Tempo médio assistido", "segundos"),
     "completion_rate": ("Taxa de conclusão", "%"),
     "retention_3s_rate": ("Retenção em 3 segundos", "%"),
     "average_view_percentage": ("Percentual médio assistido", "%"),
     "non_follower_reach_rate": ("Alcance de não seguidores", "%"),
+    "engaged_non_follower_rate": ("Contas engajadas que não seguem", "%"),
     "impressions_ctr": ("CTR de impressões", "%"),
+    "replays": ("Replays", "contagem"),
+    "skip_rate": ("Taxa de avanço/skip", "%"),
 }
 
 DERIVED_LABELS = {
@@ -55,18 +66,57 @@ DERIVED_LABELS = {
         "interações conhecidas ÷ visualizações × 100",
     ),
     "engagement_by_reach_pct": ("Engajamento por alcance", "%", "interações conhecidas ÷ alcance × 100"),
+    "accounts_engaged_by_reach_pct": (
+        "Contas engajadas por alcance",
+        "%",
+        "contas engajadas ÷ alcance × 100",
+    ),
     "views_per_follower_pct": ("Visualizações por seguidores", "%", "visualizações ÷ seguidores × 100"),
     "reach_per_follower_pct": ("Alcance por seguidores", "%", "alcance ÷ seguidores × 100"),
-    "like_rate_by_views_pct": ("Taxa de curtidas", "%", "curtidas ÷ visualizações × 100"),
-    "comment_rate_by_views_pct": ("Taxa de comentários", "%", "comentários ÷ visualizações × 100"),
-    "share_rate_by_views_pct": ("Taxa de compartilhamento", "%", "compartilhamentos ÷ visualizações × 100"),
-    "save_rate_by_views_pct": ("Taxa de salvamento", "%", "salvamentos ÷ visualizações × 100"),
+    "impressions_per_reached_account": (
+        "Impressões por conta alcançada",
+        "×",
+        "impressões ÷ alcance",
+    ),
+    "like_rate_by_views_pct": ("Taxa de curtidas por views", "%", "curtidas ÷ visualizações × 100"),
+    "like_rate_by_reach_pct": ("Taxa de curtidas por alcance", "%", "curtidas ÷ alcance × 100"),
+    "comment_rate_by_views_pct": ("Taxa de comentários por views", "%", "comentários ÷ visualizações × 100"),
+    "comment_rate_by_reach_pct": ("Taxa de comentários por alcance", "%", "comentários ÷ alcance × 100"),
+    "share_rate_by_views_pct": ("Taxa de compartilhamento por views", "%", "compartilhamentos ÷ visualizações × 100"),
+    "share_rate_by_reach_pct": ("Taxa de compartilhamento por alcance", "%", "compartilhamentos ÷ alcance × 100"),
+    "save_rate_by_views_pct": ("Taxa de salvamento por views", "%", "salvamentos ÷ visualizações × 100"),
+    "save_rate_by_reach_pct": ("Taxa de salvamento por alcance", "%", "salvamentos ÷ alcance × 100"),
+    "replay_rate_by_views_pct": ("Taxa de replay", "%", "replays ÷ visualizações × 100"),
     "follow_conversion_by_reach_pct": ("Conversão em seguidores", "%", "novos seguidores ÷ alcance × 100"),
+    "follows_per_1000_reached": (
+        "Seguidores por mil contas alcançadas",
+        "por mil",
+        "novos seguidores ÷ alcance × 1.000",
+    ),
+    "profile_visit_rate_by_reach_pct": (
+        "Visitas ao perfil por alcance",
+        "%",
+        "visitas ao perfil ÷ alcance × 100",
+    ),
     "profile_visit_conversion_pct": (
         "Conversão de visita em seguidor",
         "%",
         "novos seguidores ÷ visitas ao perfil × 100",
     ),
+    "non_follower_reach_calculated_pct": (
+        "Alcance de não seguidores calculado",
+        "%",
+        "não seguidores alcançados ÷ alcance total × 100",
+    ),
+    "followers_reach_calculated_pct": (
+        "Alcance de seguidores calculado",
+        "%",
+        "seguidores alcançados ÷ alcance total × 100",
+    ),
+    "home_impressions_share_pct": ("Participação do Feed/Home", "%", "impressões no Feed ÷ impressões × 100"),
+    "explore_impressions_share_pct": ("Participação do Explorar", "%", "impressões no Explorar ÷ impressões × 100"),
+    "profile_impressions_share_pct": ("Participação do perfil", "%", "impressões no perfil ÷ impressões × 100"),
+    "hashtag_impressions_share_pct": ("Participação de hashtags", "%", "impressões por hashtags ÷ impressões × 100"),
     "average_views_per_hour_since_publish": (
         "Média de views por hora desde a publicação",
         "views/h",
@@ -76,6 +126,11 @@ DERIVED_LABELS = {
         "Média de alcance por hora desde a publicação",
         "alcance/h",
         "alcance ÷ idade do post em horas; não mede aceleração",
+    ),
+    "average_shares_per_hour_since_publish": (
+        "Média de compartilhamentos por hora",
+        "compartilhamentos/h",
+        "compartilhamentos ÷ idade do post em horas; não mede aceleração",
     ),
 }
 
@@ -103,6 +158,29 @@ def build_evidence(
                 value=value,
                 unit=unit,
                 source=f"métrica {metrics.source}",
+            )
+        )
+
+    if metrics.recommendation_eligibility != "unknown":
+        observed_index += 1
+        items.append(
+            EvidenceItem(
+                id=f"O{observed_index}",
+                kind="observed",
+                label="Elegibilidade informada para recomendações",
+                value=metrics.recommendation_eligibility,
+                source="Status da Conta informado pelo usuário",
+            )
+        )
+    if metrics.is_original is not None:
+        observed_index += 1
+        items.append(
+            EvidenceItem(
+                id=f"O{observed_index}",
+                kind="observed",
+                label="Originalidade informada do conteúdo",
+                value=metrics.is_original,
+                source="informação fornecida pelo proprietário",
             )
         )
 
@@ -166,12 +244,25 @@ def build_evidence(
     for key, value in (technical or {}).items():
         if value in (None, "", [], {}):
             continue
-        if key.startswith("public_"):
+        if key.startswith(("public_", "official_", "instagram_")):
             observed_index += 1
-            item_id, kind, source = f"O{observed_index}", "observed", "link público"
+            item_id, kind = f"O{observed_index}", "observed"
+            source = (
+                "API oficial do Instagram"
+                if key.startswith(("official_", "instagram_"))
+                else "link público"
+            )
         elif key == "profile_history_summary":
             benchmark_index += 1
-            item_id, kind, source = f"B{benchmark_index}", "benchmark", "histórico enviado do perfil"
+            item_id, kind, source = (
+                f"B{benchmark_index}",
+                "benchmark",
+                "histórico enviado ou autorizado do perfil",
+            )
+        elif key.startswith(("comment_", "distribution_", "algorithm_", "data_access_")):
+            calculated_index += 1
+            item_id, kind = f"C{calculated_index}", "calculated"
+            source = "análise determinística do Viral Intel"
         else:
             technical_index += 1
             item_id, kind, source = f"T{technical_index}", "technical", "inspeção local da mídia"
