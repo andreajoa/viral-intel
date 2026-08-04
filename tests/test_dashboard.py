@@ -11,6 +11,8 @@ from streamlit.testing.v1 import AppTest
 
 from app.config import get_settings
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 class DashboardTests(unittest.TestCase):
     def test_image_upload_generates_report_without_ui_exception(self):
@@ -32,7 +34,10 @@ class DashboardTests(unittest.TestCase):
                 content = io.BytesIO()
                 image.save(content, "PNG")
 
-                app = AppTest.from_file("app/ui/dashboard.py", default_timeout=40).run()
+                app = AppTest.from_file(
+                    str(ROOT / "app" / "ui" / "dashboard.py"),
+                    default_timeout=40,
+                ).run()
                 self.assertEqual(len(app.exception), 0)
                 app.selectbox[1].select("image")
                 app.get("file_uploader")[0].upload("post.png", content.getvalue(), "image/png")
