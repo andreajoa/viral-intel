@@ -49,6 +49,18 @@ def _creative_refs(evidence: list[EvidenceItem]) -> list[str]:
     ][:8]
 
 
+def _cta_missing(value: str) -> bool:
+    normalized = value.strip().lower()
+    return not normalized or normalized in {
+        "não identificado",
+        "nao identificado",
+        "nenhum",
+        "ausente",
+        "não há",
+        "nao ha",
+    }
+
+
 def _enrich_resonance(
     report: StrategicReport,
     metrics: PostMetrics,
@@ -63,9 +75,14 @@ def _enrich_resonance(
     hook = str(technical.get("creative_primary_hook") or "").strip()
     mechanisms = _items(technical.get("creative_hook_mechanisms"), 4)
     emotions = _items(technical.get("creative_emotional_triggers"), 4)
+    styles = _items(technical.get("creative_style_signals"), 4)
+    visual_structure = _items(technical.get("creative_visual_structure"), 4)
     tension = str(technical.get("creative_curiosity_or_tension") or "").strip()
     summary = str(technical.get("creative_content_summary") or "").strip()
-    creative_available = bool(creative_refs or hook or mechanisms or emotions or summary)
+    observed_cta = str(technical.get("creative_cta_observed") or "").strip()
+    creative_available = bool(
+        creative_refs or hook or mechanisms or emotions or styles or visual_structure or summary
+    )
 
     circulation_ratio = _find_evidence(evidence, "Circulação em relação aos comentários")
     circulation_per_likes = _find_evidence(evidence, "Ações de circulação por 100 curtidas")
@@ -83,6 +100,18 @@ def _enrich_resonance(
         finding_parts.append("Os gatilhos emocionais observáveis são " + ", ".join(emotions) + ".")
     if tension:
         finding_parts.append(f"A tensão central é {tension}.")
+    if styles:
+        finding_parts.append(
+            "A apresentação visual sinaliza "
+            + ", ".join(styles)
+            + ", o que dá à mensagem aparência íntima e pessoal."
+        )
+    if visual_structure:
+        finding_parts.append("A estrutura visual observada é " + ", ".join(visual_structure) + ".")
+    if _cta_missing(observed_cta) and composition_refs:
+        finding_parts.append(
+            "Não há CTA explícito; a própria frase funciona como uma mensagem pronta para ser repassada a alguém."
+        )
     if circulation_ratio is not None:
         ratio = float(circulation_ratio.value)
         finding_parts.append(
@@ -129,6 +158,8 @@ def _enrich_resonance(
             architecture_parts.append(f"Gancho: “{hook}”.")
         if mechanisms:
             architecture_parts.append("Mecanismos: " + ", ".join(mechanisms) + ".")
+        if styles:
+            architecture_parts.append("Estilo visual: " + ", ".join(styles) + ".")
         report.format_insights = [
             GroundedInsight(
                 title="Arquitetura criativa observada",
@@ -170,11 +201,25 @@ def _enrich_resonance(
             ],
         ][:5]
 
+    if _cta_missing(observed_cta) and composition_refs:
+        report.next_content.change = [
+            item
+            for item in report.next_content.change
+            if not ("cta" in item.lower() and "explícito" in item.lower())
+        ]
+        preserve_note = "manter a arte sem CTA intrusivo quando a própria mensagem já for compartilhável"
+        if preserve_note not in report.next_content.preserve:
+            report.next_content.preserve = [preserve_note, *report.next_content.preserve][:6]
+        report.next_content.cta = (
+            "Não interrompa a arte com um CTA comercial. Teste uma chamada discreta apenas na legenda, "
+            "ou publique uma variação sem CTA para preservar a imersão emocional."
+        )
+
     if report.repeat_decision == "DADOS_INSUFICIENTES":
         report.executive_summary = (
             "A posição do post em relação ao histórico do perfil permanece inconclusiva, mas a análise não é vazia: "
             "a peça apresenta mecanismos claros de identificação emocional e a composição visível do engajamento "
-            "permite explicar por que ela foi amplamente redistribuída."
+            "permite explicar o padrão de redistribuição observado."
         )
         report.performance_interpretation = (
             f"Status estatístico: inconclusivo por falta de baseline comparável. Diagnóstico criativo: disponível. "
