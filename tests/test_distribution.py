@@ -41,7 +41,10 @@ class DistributionDiagnosisTests(unittest.TestCase):
             metrics=metrics,
             derived=derive_metrics(metrics),
             benchmark=benchmark,
-            technical={},
+            technical={
+                "recommendation_eligibility": "eligible",
+                "original_content": True,
+            },
             comment_summary={
                 "available": True,
                 "sample_size": 80,
