@@ -51,3 +51,42 @@ jobs:
         env:
           ENABLE_TRANSCRIPTION: "false"
         run: python -m unittest discover -s tests -v
+
+  cloud-smoke:
+    name: Streamlit Cloud
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v6
+
+      - name: Configurar Python do Streamlit Cloud
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: cloud/requirements.txt
+
+      - name: Instalar FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Instalar dependencias exatas da nuvem
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r cloud/requirements.txt
+          python -m pip check
+
+      - name: Abrir o entrypoint da nuvem
+        env:
+          ENABLE_TRANSCRIPTION: "false"
+          ENABLE_PUBLIC_COLLECTION: "false"
+          EPHEMERAL_MODE: "true"
+        run: python -m unittest discover -s tests -p 'test_cloud_entrypoint.py' -v
+
+      - name: Executar upload no painel de producao
+        env:
+          ENABLE_TRANSCRIPTION: "false"
+          ENABLE_PUBLIC_COLLECTION: "false"
+          EPHEMERAL_MODE: "true"
+        run: python -m unittest discover -s tests -p 'test_dashboard_v3.py' -v
