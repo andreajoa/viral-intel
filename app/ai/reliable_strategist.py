@@ -72,9 +72,7 @@ class ReliableAIStrategist(AIStrategist):
                     )
                     return _report_text(interaction), model
                 except Exception as exc:
-                    failures.append(
-                        f"interactions/{model}={type(exc).__name__}: {str(exc)[:180]}"
-                    )
+                    failures.append(f"interactions/{model}={type(exc).__name__}: {str(exc)[:180]}")
 
                 try:
                     response = client.models.generate_content(
