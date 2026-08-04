@@ -1,40 +1,49 @@
-# Viral Intel 2.1
+# Viral Intel 3.0
 
-O Viral Intel investiga por que um vídeo, carrossel, imagem ou texto ficou acima ou
-abaixo do desempenho habitual do próprio perfil. A versão 2.0 foi reconstruída para
-separar quatro coisas que antes apareciam misturadas:
+O Viral Intel investiga por que um vídeo, carrossel, imagem ou texto ficou acima ou abaixo do desempenho habitual do próprio perfil. A análise separa rigorosamente quatro camadas:
 
 1. **Fatos observados** — números do Insights, comentários públicos e propriedades da mídia.
 2. **Métricas calculadas** — fórmulas transparentes, sem transformar dado ausente em zero.
 3. **Benchmark do perfil** — comparação com posts do mesmo formato e estágio de vida.
-4. **Hipóteses** — explicações possíveis, sempre com evidência, confiança e limite.
+4. **Hipóteses testáveis** — explicações possíveis, sempre com evidência, confiança e limite.
 
-O sistema não promete “decifrar” o código interno de Instagram, TikTok ou YouTube.
-Ele usa os dados do seu perfil para testar hipóteses e decidir entre repetir, iterar,
-mudar ou reunir mais informação.
+O sistema não promete “decifrar” o código interno de Instagram, TikTok ou YouTube. Ele usa os dados do próprio perfil para decidir entre repetir, iterar, mudar ou reunir mais informação.
 
-## O que mudou
+## Arquitetura de produção
 
-- Gemini usa análise multimodal por `generateContent`, saída JSON estruturada e
-  fallback automático entre modelos compatíveis configurados para a conta.
-- OpenAI usa Responses API e saída estruturada; Gemini e Anthropic também usam schema.
-- Toda hipótese precisa citar IDs reais do ledger (`O`, `C`, `B` ou `T`).
-- Referências inexistentes são removidas e a hipótese é rebaixada para não avaliável.
-- Posts são comparados ao mesmo formato e, quando possível, ao mesmo estágio de vida.
-- Perfil analisado por formato, tema, tipo de gancho, CTA, cadência e top posts.
-- Vídeo medido localmente com FFmpeg: duração, resolução, proporção, FPS, áudio,
-  cortes, frames do início/meio/fim e transcrição opcional.
-- Imagens e carrosséis têm dimensões, proporção, brilho e entropia visual registrados.
-- O painel aceita upload direto, link complementar, métricas privadas e histórico CSV.
-- O painel impede que uma imagem seja analisada como reel/vídeo e que um único slide
-  seja tratado como carrossel.
-- Relatórios completos podem ser baixados em JSON e Markdown.
-- Sem chave de IA, o motor determinístico continua útil e honesto.
+- Gemini usa análise multimodal com saída estruturada validada por Pydantic.
+- A recuperação da Gemini ocorre em três níveis: saída tipada, Interactions API e JSON validado localmente.
+- O sistema alterna entre modelos compatíveis quando a rota principal falha.
+- OpenAI e Anthropic permanecem disponíveis como provedores alternativos configuráveis.
+- Falhas da IA ou da coleta pública nunca derrubam o relatório completo.
+- O motor determinístico continua entregando cálculos, baseline e limitações quando nenhum provedor responde.
+- Nenhuma chave é mostrada na interface, incluída nos relatórios ou preservada nos erros técnicos.
+
+## O que o painel analisa
+
+- Upload direto de vídeo, imagem, captura ou slides.
+- Link público complementar do Instagram, TikTok, YouTube, Threads ou Facebook.
+- Métricas privadas do Insights, incluindo alcance, compartilhamentos, salvamentos, retenção e conclusão.
+- Histórico CSV para construir a mediana real do próprio perfil.
+- Vídeo local com FFmpeg: duração, resolução, proporção, FPS, áudio, cortes e frames representativos.
+- Imagens e carrosséis: dimensões, proporção, brilho, entropia visual e leitura multimodal.
+- Perfil por formato, tema, tipo de gancho, CTA, cadência e melhores posts.
+
+Uma captura estática de reel ou vídeo é aceita como **análise parcial**. Nesse caso, o sistema deixa explícito que ritmo, áudio, cortes e retenção temporal não foram medidos. Um único slide de carrossel também é tratado como leitura incompleta, sem inventar o restante da sequência.
+
+## Resultado entregue
+
+- Interpretação do desempenho com qualidade dos dados visível.
+- Causas prováveis com evidências, confiança e limitações.
+- Plano do próximo conteúdo com ganchos, estrutura, legenda e CTA.
+- Experimentos que alteram uma variável por vez.
+- Ledger de evidências com IDs rastreáveis.
+- Downloads em JSON e Markdown.
+- Diagnóstico técnico de recuperação quando algum provedor falha.
 
 ## Instalação no Mac
 
-Requisitos: Python 3.11 ou 3.12 e FFmpeg. O instalador detecta Python 3.14 e,
-quando o Homebrew está disponível, instala automaticamente o Python 3.12 e o FFmpeg.
+Requisitos: Python 3.11 ou 3.12 e FFmpeg. O instalador detecta Python incompatível e, quando o Homebrew está disponível, instala automaticamente Python 3.12 e FFmpeg.
 
 ```bash
 cd ~/viral-intel
@@ -49,43 +58,69 @@ cd ~/viral-intel
 ./run.sh
 ```
 
-O navegador abrirá o painel. Não é mais necessário mover vídeos para uma pasta fixa:
-você pode enviá-los diretamente na tela.
+O navegador abrirá o painel. Não é necessário mover vídeos para uma pasta fixa; os arquivos são enviados diretamente na tela.
 
-O nome da pasta pode ser `viral-intel`, `viral-intel2` ou outro. Os scripts descobrem
-automaticamente a pasta em que estão. Se existir um `.venv` criado com Python 3.14,
-o instalador o preserva com o nome `.venv-incompativel-<data>` e cria um novo com
-Python 3.12. Em Macs Intel, as dependências binárias são fixadas em versões que ainda
-oferecem wheels para Python 3.12/macOS 10.15+. O PyArrow permanece na versão 16.0.0
-para evitar o segfault conhecido em macOS 11 Intel nas versões seguintes.
+O nome da pasta pode ser `viral-intel`, `viral-intel2` ou outro. Os scripts descobrem automaticamente a pasta em que estão. Em Macs Intel, as dependências binárias permanecem compatíveis com Python 3.12 e o PyArrow local é fixado para evitar regressões conhecidas nesse ambiente.
 
 ## Como obter uma análise realmente forte
 
 1. Exporte ou digite as métricas privadas do post.
-2. Envie o vídeo ou os slides originais.
-3. Envie um CSV com pelo menos 10 posts do mesmo formato.
+2. Envie o vídeo original ou todos os slides na ordem correta.
+3. Envie um CSV com pelo menos 10 posts comparáveis.
 4. Compare números capturados no mesmo estágio: 6h com 6h, 24h com 24h, 7d com 7d.
 5. Depois da recomendação, altere uma variável por vez e acompanhe a métrica definida.
 
-Use `data/profile_template.csv` como modelo. Percentuais devem estar na escala humana:
-`42.5` significa 42,5%. Células vazias permanecem indisponíveis.
-
-O formato escolhido precisa corresponder ao arquivo: reel/short/vídeo exige um arquivo
-de vídeo; carrossel exige dois ou mais slides; imagem exige um único arquivo de imagem.
-Uma captura estática de um reel não permite medir gancho temporal, ritmo ou transcrição.
+Use `data/profile_template.csv` como modelo. Percentuais devem estar na escala humana: `42.5` significa 42,5%. Células vazias permanecem indisponíveis.
 
 ## Estrutura
 
 ```text
 app/analysis/       cálculos, baseline, CSV e ledger
-app/ai/             schema, guardrails e provedores
-app/media/          inspeção local de vídeo/imagem
+app/ai/             schemas, guardrails e provedores resilientes
+app/media/          inspeção local de vídeo e imagem
 app/online/         coleta pública complementar
-app/pipeline/       orquestração e persistência
-app/reporting/      exportação JSON/Markdown
-app/ui/             painel Streamlit
-tests/              testes do núcleo e regressões
+app/pipeline/       orquestração tolerante a falhas
+app/reporting/      exportação JSON e Markdown
+app/ui/             painéis Streamlit
+cloud/              entrypoint e dependências de produção
+tests/              unidade, integração e smoke tests
 ```
+
+## Segurança e privacidade
+
+- `.env`, Secrets do Streamlit, ambiente virtual, mídia e relatórios ficam fora do Git.
+- Uploads, frames e relatórios temporários são apagados no modo de nuvem.
+- URLs aceitas são limitadas às plataformas suportadas.
+- A coleta pública é best-effort e nunca substitui os Insights do proprietário.
+- Cookies só devem ser usados em contas e conteúdos autorizados.
+- Erros de provedores têm chaves removidas antes de serem exibidos.
+
+## Validação
+
+O CI executa duas rotas independentes:
+
+1. ambiente completo de desenvolvimento;
+2. ambiente exato do Streamlit Cloud, usando `cloud/requirements.txt`.
+
+```bash
+python -m ruff check app cloud tests
+python -m ruff format --check app cloud tests
+python -m pip check
+python -m compileall -q app cloud tests
+python -m unittest discover -s tests -v
+```
+
+Os smoke tests abrem `cloud/streamlit_app.py` e fazem um upload real no painel de produção.
+
+## Deploy no Streamlit Community Cloud
+
+- arquivo principal: `cloud/streamlit_app.py`;
+- Python: 3.12;
+- dependências: `cloud/requirements.txt`;
+- dependência Linux: `packages.txt` com FFmpeg;
+- Secret obrigatório para leitura multimodal: `GOOGLE_API_KEY` na raiz do TOML.
+
+O entrypoint possui uma tela de diagnóstico para falhas de inicialização. O modo de nuvem desativa a transcrição Whisper local para respeitar a memória gratuita e mantém o relatório somente na sessão até o download.
 
 ## Fontes metodológicas oficiais
 
@@ -97,34 +132,5 @@ tests/              testes do núcleo e regressões
 - [YouTube — momentos-chave de retenção](https://support.google.com/youtube/answer/9314415)
 - [OpenAI — Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
 - [OpenAI — Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses)
-- [Gemini — modelos e saída estruturada](https://ai.google.dev/gemini-api/docs/structured-output)
+- [Gemini — saída estruturada](https://ai.google.dev/gemini-api/docs/structured-output)
 - [Anthropic — modelos atuais](https://docs.anthropic.com/en/docs/about-claude/models/overview)
-
-## Segurança e privacidade
-
-- `.env`, ambiente virtual, mídia enviada e relatórios novos ficam fora do Git.
-- Nenhuma chave é mostrada no painel ou gravada no relatório.
-- A coleta por link é best-effort e não substitui Insights do proprietário.
-- Use cookies somente de contas e conteúdos que você está autorizado a acessar.
-- Relatórios, mídias, históricos e exportações locais permanecem fora do Git.
-
-## Validação
-
-```bash
-python -m unittest discover -s tests -v
-python -m compileall -q app tests
-```
-
-## Deploy privado gratuito
-
-O repositório inclui uma entrada enxuta para o Streamlit Community Cloud:
-
-- arquivo principal: `cloud/streamlit_app.py`;
-- Python: 3.12;
-- dependências de nuvem: `cloud/requirements.txt`;
-- dependência Linux: `packages.txt` (FFmpeg).
-
-No painel de Secrets do Streamlit, configure `GOOGLE_API_KEY` na raiz do TOML. A chave
-nunca deve entrar no GitHub. O modo de nuvem desativa o Whisper local para respeitar a
-memória gratuita e apaga uploads, frames e relatórios temporários depois que a resposta
-é guardada na sessão. Use os botões do painel para baixar o relatório que quiser manter.
