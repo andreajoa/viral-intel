@@ -75,7 +75,11 @@ def _collect_public(url: str, settings: Settings) -> dict[str, Any]:
         }
     try:
         result = YTDLPCollector(settings=settings).fetch_metadata(clean_url)
-        return result if isinstance(result, dict) else {"source_ok": False, "error": "Resposta pública inválida."}
+        return (
+            result
+            if isinstance(result, dict)
+            else {"source_ok": False, "error": "Resposta pública inválida."}
+        )
     except Exception as exc:
         return {
             "source_ok": False,
@@ -137,7 +141,10 @@ def analyze_content(
                 "Somente uma captura/capa do carrossel foi inspecionada; envie todos os slides "
                 "para avaliar progressão, entrega da promessa e fechamento."
             )
-        if detected_format in {ContentFormat.REEL, ContentFormat.SHORT, ContentFormat.VIDEO} and inspection.get("kind") == "image":
+        if (
+            detected_format in {ContentFormat.REEL, ContentFormat.SHORT, ContentFormat.VIDEO}
+            and inspection.get("kind") == "image"
+        ):
             inspection.setdefault("warnings", []).append(
                 "Foi enviada uma captura estática de um vídeo. A análise criativa é parcial: "
                 "ritmo, cortes, áudio e retenção temporal não puderam ser medidos."
@@ -154,9 +161,7 @@ def analyze_content(
             transcription=inspection.get("transcription") or "",
         )
     except Exception as exc:
-        observation_errors = [
-            f"observação multimodal: {type(exc).__name__}: {str(exc)[:240]}"
-        ]
+        observation_errors = [f"observação multimodal: {type(exc).__name__}: {str(exc)[:240]}"]
 
     if (
         media_observation
