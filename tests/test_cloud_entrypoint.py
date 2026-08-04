@@ -3,11 +3,13 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
 from app.config import get_settings
 
+ROOT = Path(__file__).resolve().parents[1]
 _ENV_KEYS = (
     "DATA_DIR",
     "ENABLE_TRANSCRIPTION",
@@ -40,7 +42,7 @@ class CloudEntrypointTests(unittest.TestCase):
                 get_settings.cache_clear()
 
                 app = AppTest.from_file(
-                    "cloud/streamlit_app.py",
+                    str(ROOT / "cloud" / "streamlit_app.py"),
                     default_timeout=50,
                 ).run()
 
