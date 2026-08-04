@@ -6,10 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from app.config import get_settings
 from PIL import Image, ImageDraw
 from streamlit.testing.v1 import AppTest
-
-from app.config import get_settings
 
 
 _ENV_KEYS = (
