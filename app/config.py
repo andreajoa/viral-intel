@@ -82,6 +82,23 @@ class Settings:
     cookies_file: str = field(default_factory=lambda: os.getenv("COOKIES_FILE", ""))
     command_timeout_seconds: int = field(default_factory=lambda: _int("COMMAND_TIMEOUT_SECONDS", 180, 10))
 
+    enable_instagram_graph: bool = field(
+        default_factory=lambda: _bool("ENABLE_INSTAGRAM_GRAPH", True)
+    )
+    instagram_access_token: str = field(
+        default_factory=lambda: os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
+    )
+    instagram_user_id: str = field(default_factory=lambda: os.getenv("INSTAGRAM_USER_ID", ""))
+    instagram_api_version: str = field(
+        default_factory=lambda: os.getenv("INSTAGRAM_API_VERSION", "v25.0")
+    )
+    max_instagram_comments: int = field(
+        default_factory=lambda: _int("MAX_INSTAGRAM_COMMENTS", 300, 10)
+    )
+    instagram_history_limit: int = field(
+        default_factory=lambda: _int("INSTAGRAM_HISTORY_LIMIT", 20, 5)
+    )
+
     @property
     def exports_dir(self) -> Path:
         return self.data_dir / "exports"
