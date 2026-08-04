@@ -19,10 +19,10 @@ jobs:
 
     steps:
       - name: Baixar codigo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Configurar Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -50,6 +50,4 @@ jobs:
       - name: Executar testes
         env:
           ENABLE_TRANSCRIPTION: "false"
-          ENABLE_PUBLIC_COLLECTION: "false"
-          EPHEMERAL_MODE: "true"
         run: python -m unittest discover -s tests -v
