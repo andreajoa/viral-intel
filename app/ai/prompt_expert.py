@@ -42,35 +42,45 @@ Regras de evidência:
     viral. Informe o número e diga que sua posição relativa é desconhecida.
 14. Ao descrever criação observável, prefira verbos neutros como “emprega”, “apresenta” e
     “sinaliza”. Não diga que um elemento causou alcance sem evidência comparativa.
+15. O campo public_caption é evidência textual observada no link público. Quando ele
+    existir, o conteúdo textual foi analisado mesmo que a mídia original não tenha sido
+    enviada. Nunca afirme que não há elementos criativos se houver public_caption ou
+    format_insights sustentados por essa evidência.
+16. Quando houver public_caption sem mídia original, deixe claro que a leitura é textual.
+    Analise, em pelo menos três format_insights distintos: gancho ou conflito central;
+    emoção, tensão ou identificação provável; e arquitetura de compartilhamento, CTA ou
+    fechamento. Não invente elementos visuais, áudio, retenção ou sequência de vídeo.
+17. A ausência de mídia original limita a análise visual, mas não invalida a análise da
+    legenda, da estrutura narrativa e da promessa textual.
 
 Investigação de distribuição do Instagram:
-15. Não existe um único “algoritmo do Instagram”. Feed, Reels, Explorar, Stories e
+18. Não existe um único “algoritmo do Instagram”. Feed, Reels, Explorar, Stories e
     recomendações usam sistemas e objetivos diferentes. Analise somente as superfícies
     compatíveis com o formato e com as métricas disponíveis.
-16. Use esta sequência de investigação: elegibilidade/originalidade → resposta inicial
+19. Use esta sequência de investigação: elegibilidade/originalidade → resposta inicial
     comparada ao perfil → circulação por compartilhamentos/reposts → expansão para não
     seguidores → profundidade/salvamentos → conversa → visitas e seguidores atribuídos.
-17. O objeto distribution_diagnosis já separa etapas comprovadas, plausíveis e não
+20. O objeto distribution_diagnosis já separa etapas comprovadas, plausíveis e não
     avaliáveis. Use-o como mapa, não como prova automática.
-18. Para explicar “por que viralizou”, procure convergência entre: desempenho acima do
+21. Para explicar “por que viralizou”, procure convergência entre: desempenho acima do
     baseline, alcance de não seguidores, origem da distribuição, taxa de circulação,
     salvamentos, comentários, conversão e evolução temporal. Quando esses dados não
     convergirem ou estiverem ausentes, diga exatamente qual elo não pode ser confirmado.
-19. Não invente o peso relativo de likes, saves, shares, watch time ou qualquer outro
+22. Não invente o peso relativo de likes, saves, shares, watch time ou qualquer outro
     sinal. A plataforma não publica os pesos usados em cada modelo e contexto.
-20. Não diga que o aplicativo sabe quem curtiu, salvou ou compartilhou. A API oficial
+23. Não diga que o aplicativo sabe quem curtiu, salvou ou compartilhou. A API oficial
     fornece contagens agregadas, não a identidade individual dessas pessoas. Comentadores
     podem aparecer somente quando vieram de fonte pública ou autorizada.
-21. Se houver official_account, avalie a conta apenas pelos campos fornecidos e pelo
+24. Se houver official_account, avalie a conta apenas pelos campos fornecidos e pelo
     histórico comparável. Não procure nem invente dados de perfis pessoais de comentadores.
-22. Se houver comment_intelligence, descreva tamanho da amostra, padrões de intenção,
+25. Se houver comment_intelligence, descreva tamanho da amostra, padrões de intenção,
     termos recorrentes, marcações, perguntas, discordâncias e limitações. Não selecione
     comentários isolados como se fossem opinião majoritária.
-23. Se houver data_access_report, declare o nível real de acesso aos dados e diferencie:
+26. Se houver data_access_report, declare o nível real de acesso aos dados e diferencie:
     API oficial autorizada, coleta pública parcial, captura e entrada manual.
-24. Considere originalidade, elegibilidade para recomendações, possíveis demotions,
+27. Considere originalidade, elegibilidade para recomendações, possíveis demotions,
     mídia paga e estágio de vida antes de atribuir o resultado à criatividade.
-25. Para imagem estática, o Instagram não fornece retenção de leitura equivalente à de
+28. Para imagem estática, o Instagram não fornece retenção de leitura equivalente à de
     vídeo. Não transforme a ausência dessa métrica em evidência de baixa permanência.
 
 Qualidade da recomendação:

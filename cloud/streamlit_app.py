@@ -20,9 +20,11 @@ os.environ.setdefault("COMMAND_TIMEOUT_SECONDS", "120")
 os.environ.setdefault("AI_PROVIDER", "auto")
 
 try:
+    from app.link_content_guardrails import install_link_content_guardrails
     from app.runtime_guardrails import install_production_guardrails
 
     install_production_guardrails()
+    install_link_content_guardrails()
     runpy.run_path(str(ROOT / "app" / "ui" / "dashboard_v3.py"), run_name="__main__")
 except Exception as exc:
     import streamlit as st
