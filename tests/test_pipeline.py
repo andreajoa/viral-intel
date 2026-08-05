@@ -103,10 +103,7 @@ class PipelineTests(unittest.TestCase):
             )
             strategy = report.strategy
             self.assertEqual(strategy["repeat_decision"], "MUDAR")
-            self.assertIn(
-                strategy["performance_tier"],
-                {"ABAIXO_DO_TÍPICO", "INCONCLUSIVO"},
-            )
+            self.assertEqual(report.benchmark.status, "ABAIXO_DO_TÍPICO")
 
 
 if __name__ == "__main__":
