@@ -429,7 +429,9 @@ def _install_pipeline_enrichment() -> None:
             )
 
         manual = kwargs.get("manual_metrics")
-        manual_dict = manual.model_dump(mode="python") if isinstance(manual, PostMetrics) else dict(manual or {})
+        manual_dict = (
+            manual.model_dump(mode="python") if isinstance(manual, PostMetrics) else dict(manual or {})
+        )
         context = dict(kwargs.get("distribution_context") or {})
         context["analysis_mode"] = mode
         context["evidence_package_declared"] = True
