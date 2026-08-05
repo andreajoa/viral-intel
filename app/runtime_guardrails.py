@@ -1,9 +1,10 @@
 """Production quality gates installed before the analysis pipeline is imported.
 
-The guards prevent three failure modes observed in real Streamlit tests:
-1. a missing public count being converted into a factual zero;
+The guards prevent four failure modes observed in real Streamlit tests:
+1. a missing screenshot count being converted into a factual zero;
 2. an empty distribution framework being presented as a causal diagnosis;
-3. a useful creative reading being buried by an inconclusive benchmark.
+3. a useful creative reading being buried by an inconclusive benchmark;
+4. a long table of unavailable fields dominating the report.
 """
 
 from __future__ import annotations
@@ -83,7 +84,9 @@ def _install_distribution_gate() -> None:
         ]
         diagnosis["supported_stage_count"] = len(supported)
         diagnosis["has_distribution_evidence"] = bool(supported)
-        if not supported:
+        if supported:
+            diagnosis["stages"] = supported
+        else:
             diagnosis["stages"] = []
             diagnosis["likely_distribution_path"] = []
             diagnosis["strongest_observed_signals"] = []
@@ -233,6 +236,73 @@ def _install_strategy_gate() -> None:
     ReliableAIStrategist._viral_intel_quality_gate = True
 
 
+def _install_ui_gate() -> None:
+    """Make the useful content diagnosis the first report tab and compact empty access tables."""
+
+    import streamlit as st
+
+    if getattr(st, "_viral_intel_quality_gate", False):
+        return
+
+    original_tabs = st.tabs
+    original_dataframe = st.dataframe
+    original_metric = st.metric
+
+    def quality_tabs(labels: Any, *args: Any, **kwargs: Any):
+        label_list = list(labels)
+        report_tabs = [
+            "Distribuição e algoritmo",
+            "Conteúdo",
+            "Público e comentários",
+            "Conta e histórico",
+            "Próximo conteúdo",
+            "Experimentos",
+            "Evidências",
+        ]
+        if label_list == report_tabs:
+            displayed = [
+                "Análise do conteúdo",
+                "Distribuição comprovável",
+                "Público e comentários",
+                "Conta e histórico",
+                "Próximo conteúdo",
+                "Experimentos",
+                "Evidências",
+            ]
+            contexts = original_tabs(displayed, *args, **kwargs)
+            return [contexts[1], contexts[0], *contexts[2:]]
+        return original_tabs(labels, *args, **kwargs)
+
+    def compact_dataframe(data: Any = None, *args: Any, **kwargs: Any):
+        if isinstance(data, list) and data and all(isinstance(row, dict) for row in data):
+            keys = set(data[0])
+            if keys == {"Dado", "Disponível"} and any(
+                row.get("Dado") == "Insights privados autorizados" for row in data
+            ):
+                available = [row for row in data if row.get("Disponível") == "Sim"]
+                if available:
+                    st.caption("Dados adicionais disponíveis nesta execução:")
+                    return original_dataframe(available, *args, **kwargs)
+                st.warning(
+                    "Esta execução não acessou Insights privados, textos de comentários nem histórico do perfil. "
+                    "Isso limita a classificação da distribuição, mas não impede a análise do conteúdo."
+                )
+                return None
+        return original_dataframe(data, *args, **kwargs)
+
+    def quality_metric(label: str, value: Any, *args: Any, **kwargs: Any):
+        if label == "Decisão" and str(value) == "Dados insuficientes":
+            value = "Sem baseline"
+        if label == "Qualidade dos dados":
+            label = "Dados de distribuição"
+        return original_metric(label, value, *args, **kwargs)
+
+    st.tabs = quality_tabs
+    st.dataframe = compact_dataframe
+    st.metric = quality_metric
+    st._viral_intel_quality_gate = True
+
+
 def install_production_guardrails() -> None:
     """Install idempotent quality gates before importing the pipeline/dashboard."""
 
@@ -242,4 +312,5 @@ def install_production_guardrails() -> None:
     _install_metric_gate()
     _install_distribution_gate()
     _install_strategy_gate()
+    _install_ui_gate()
     _INSTALLED = True
