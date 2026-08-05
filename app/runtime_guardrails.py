@@ -216,7 +216,7 @@ def _install_strategy_gate() -> None:
                     "está disponível e identifica mecanismos específicos de gancho, emoção, tensão e apresentação."
                 )
                 report.performance_interpretation = (
-                    f"Análise criativa: disponível. Classificação estatística: inconclusiva. "
+                    f"Diagnóstico criativo: disponível. Classificação estatística: inconclusiva. "
                     f"Qualidade dos dados de distribuição: {level} ({score}/100). "
                     "O relatório não transforma ausência de métricas em baixo desempenho."
                 )
