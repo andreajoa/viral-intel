@@ -54,9 +54,7 @@ class InstagramEmbedCollectorTests(unittest.TestCase):
         </body></html>
         """
         session = FakeSession([FakeResponse(document)])
-        result = InstagramEmbedCollector(session=session).collect(
-            "https://www.instagram.com/reel/XYZ789/"
-        )
+        result = InstagramEmbedCollector(session=session).collect("https://www.instagram.com/reel/XYZ789/")
 
         self.assertTrue(result["source_ok"])
         self.assertEqual(result["likes"], 12050)
@@ -66,9 +64,7 @@ class InstagramEmbedCollectorTests(unittest.TestCase):
 
     def test_http_failures_are_recoverable(self):
         session = FakeSession([FakeResponse("blocked", 429), FakeResponse("blocked", 429)])
-        result = InstagramEmbedCollector(session=session).collect(
-            "https://www.instagram.com/p/ABC123/"
-        )
+        result = InstagramEmbedCollector(session=session).collect("https://www.instagram.com/p/ABC123/")
 
         self.assertFalse(result["source_ok"])
         self.assertIn("429", result["error"])
