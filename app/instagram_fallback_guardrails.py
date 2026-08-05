@@ -70,9 +70,9 @@ def _collection_was_blocked(report: Any, url: str) -> bool:
 def _mark_text_evidence(report: Any) -> None:
     for item in report.evidence:
         label = str(item.label or "").strip().lower()
-        if label == "Manual caption":
+        if label == "manual caption":
             item.source = "texto fornecido pela pessoa usuária"
-        elif label.startswith("Creative "):
+        elif label.startswith("creative "):
             item.source = "análise textual determinística do texto fornecido"
 
 
