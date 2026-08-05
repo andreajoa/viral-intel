@@ -52,7 +52,7 @@ class PipelineTests(unittest.TestCase):
                 use_ai=False,
                 settings=settings,
             )
-            self.assertEqual(report.schema_version, "2.0")
+            self.assertEqual(report.schema_version, "3.0")
             self.assertEqual(report.provider, "deterministic")
             self.assertTrue((settings.exports_dir / f"{report.report_id}.json").is_file())
             self.assertTrue((settings.exports_dir / f"{report.report_id}.md").is_file())
@@ -101,9 +101,9 @@ class PipelineTests(unittest.TestCase):
                 use_ai=False,
                 settings=settings,
             )
-
+            strategy = report.strategy
+            self.assertEqual(strategy["repeat_decision"], "MUDAR")
             self.assertEqual(report.benchmark.status, "ABAIXO_DO_TÍPICO")
-            self.assertEqual(report.strategy["repeat_decision"], "MUDAR")
 
 
 if __name__ == "__main__":

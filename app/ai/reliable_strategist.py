@@ -41,6 +41,15 @@ def _find_evidence(evidence: list[EvidenceItem], label: str) -> EvidenceItem | N
     return next((item for item in evidence if lowered in item.label.lower()), None)
 
 
+def _refs_for(evidence: list[EvidenceItem], *labels: str) -> list[str]:
+    refs: list[str] = []
+    for label in labels:
+        item = _find_evidence(evidence, label)
+        if item is not None:
+            refs.append(item.id)
+    return list(dict.fromkeys(refs))[:8]
+
+
 def _creative_refs(evidence: list[EvidenceItem]) -> list[str]:
     return [
         item.id
@@ -237,6 +246,148 @@ def _enrich_resonance(
     return report
 
 
+def _enrich_forensics(
+    report: StrategicReport,
+    metrics: PostMetrics,
+    benchmark: BenchmarkResult,
+    evidence: list[EvidenceItem],
+    technical: dict[str, Any],
+) -> StrategicReport:
+    """Guarantee a visible distribution, audience and account investigation."""
+
+    distribution = technical.get("distribution_diagnosis") or {}
+    comments = technical.get("comment_intelligence") or {}
+    account = technical.get("official_account") or {}
+    access = technical.get("data_access_report") or {}
+
+    distribution_refs = _refs_for(
+        evidence,
+        "Distribution diagnosis",
+        "Alcance de não seguidores",
+        "Ações de circulação por 100 curtidas",
+        "Razão vs mediana",
+        "Novos seguidores atribuídos",
+    )
+    comment_refs = _refs_for(evidence, "Comment intelligence", "Official comments sample")
+    account_refs = _refs_for(evidence, "Official account", "Seguidores no momento da captura")
+
+    stages = distribution.get("stages") or []
+    useful_stages = [
+        stage for stage in stages if stage.get("status") not in {"NÃO_AVALIÁVEL", "INCONCLUSIVO"}
+    ]
+    path = _items(distribution.get("likely_distribution_path"), 5)
+    strongest = _items(distribution.get("strongest_observed_signals"), 5)
+    counter = _items(distribution.get("counter_signals_or_risks"), 4)
+
+    if distribution and (path or useful_stages):
+        finding_parts = []
+        if path:
+            finding_parts.append("Trajetória reconstruída: " + " ".join(path))
+        if strongest:
+            finding_parts.append("Sinais mais fortes: " + "; ".join(strongest) + ".")
+        if counter:
+            finding_parts.append("Sinais contrários ou riscos: " + "; ".join(counter) + ".")
+        finding_parts.append(
+            "A conclusão combina as etapas disponíveis; não representa acesso ao score privado nem aos pesos internos do Instagram."
+        )
+        has_official_expansion = metrics.non_follower_reach_rate is not None
+        has_benchmark = benchmark.status != "INCONCLUSIVO"
+        judgment = "SUSTENTADA" if has_official_expansion and has_benchmark else "PLAUSÍVEL"
+        confidence = 86 if judgment == "SUSTENTADA" else 68 if useful_stages else 48
+        hypothesis = CausalHypothesis(
+            title="Trajetória provável de distribuição",
+            finding=" ".join(finding_parts),
+            evidence_refs=distribution_refs,
+            confidence=confidence,
+            limitation=(
+                "O Instagram não entrega o score individual de ranking, o peso exato dos sinais ou a causa de cada impressão."
+            ),
+            judgment=judgment,
+            counterevidence_refs=[],
+            needed_to_confirm=_items(distribution.get("minimum_data_to_improve"), 5),
+        )
+        report.root_cause_hypotheses = [
+            hypothesis,
+            *[
+                item
+                for item in report.root_cause_hypotheses
+                if item.title.lower() != hypothesis.title.lower()
+            ],
+        ][:5]
+
+    if comments.get("available"):
+        sample_size = int(comments.get("sample_size") or 0)
+        unique = int(comments.get("unique_commenters") or 0)
+        intents = comments.get("intent_distribution") or []
+        intent_text = (
+            "; ".join(f"{item.get('intent')} ({item.get('share_of_sample_pct')}%)" for item in intents[:4])
+            or "sem intenção dominante"
+        )
+        finding = (
+            f"A amostra contém {sample_size} comentários e {unique} comentadores identificáveis na fonte. "
+            f"Padrões mais frequentes: {intent_text}. "
+            f"Marcações aparecem em {comments.get('mention_rate_pct', 0)}% da amostra e perguntas em "
+            f"{comments.get('question_rate_pct', 0)}%."
+        )
+        insight = GroundedInsight(
+            title="Leitura da amostra de comentários",
+            finding=finding,
+            evidence_refs=comment_refs,
+            confidence=88 if sample_size >= 30 else 65,
+            limitation=str(comments.get("coverage_note") or "Comentários não representam toda a audiência."),
+        )
+        report.audience_insights = [
+            insight,
+            *[item for item in report.audience_insights if item.title.lower() != insight.title.lower()],
+        ][:5]
+
+    if account:
+        username = str(account.get("username") or "conta autenticada")
+        follower_count = account.get("followers_count")
+        media_count = account.get("media_count")
+        biography = str(account.get("biography") or "").strip()
+        account_parts = [f"Conta profissional autenticada: @{username}."]
+        if follower_count is not None:
+            account_parts.append(f"Seguidores informados pela API: {follower_count}.")
+        if media_count is not None:
+            account_parts.append(f"Publicações informadas: {media_count}.")
+        if biography:
+            account_parts.append(f"Posicionamento declarado na bio: {biography[:280]}")
+        insight = GroundedInsight(
+            title="Contexto da conta autenticada",
+            finding=" ".join(account_parts),
+            evidence_refs=account_refs,
+            confidence=95,
+            limitation=(
+                "Esses campos descrevem a conta; não revelam reputação algorítmica, interesses privados da audiência ou o motivo causal do alcance."
+            ),
+        )
+        report.profile_insights = [
+            insight,
+            *[item for item in report.profile_insights if item.title.lower() != insight.title.lower()],
+        ][:5]
+
+    access_level = str(access.get("level") or "upload_and_manual_only")
+    access_caveat = (
+        f"Nível de acesso aos dados nesta execução: {access_level}. "
+        "Contagens agregadas podem ser analisadas, mas a API não fornece a identidade individual de quem curtiu, salvou ou compartilhou."
+    )
+    if access_caveat not in report.caveats:
+        report.caveats = [access_caveat, *report.caveats][:8]
+    algorithm_caveat = "O relatório reconstrói uma trajetória provável por superfícies e sinais observáveis; não conhece os pesos internos nem o score atribuído a cada usuário."
+    if algorithm_caveat not in report.caveats:
+        report.caveats = [algorithm_caveat, *report.caveats][:8]
+
+    if distribution and path:
+        status = "confirmada em parte" if useful_stages else "ainda inconclusiva"
+        report.performance_interpretation = (
+            f"Investigação de distribuição {status}. "
+            + report.performance_interpretation
+            + " A análise separa elegibilidade, resposta inicial, circulação, expansão para não seguidores, conversa e conversão."
+        )
+    return report
+
+
 class ReliableAIStrategist(AIStrategist):
     """Use typed Gemini output first, then progressively safer recovery routes."""
 
@@ -261,12 +412,9 @@ class ReliableAIStrategist(AIStrategist):
             niche=niche,
             images=images,
         )
-        return (
-            _enrich_resonance(report, metrics, benchmark, quality, evidence, technical),
-            provider,
-            model,
-            errors,
-        )
+        report = _enrich_resonance(report, metrics, benchmark, quality, evidence, technical)
+        report = _enrich_forensics(report, metrics, benchmark, evidence, technical)
+        return report, provider, model, errors
 
     def _call_gemini(self, prompt: str, images: list[bytes]) -> tuple[str, str]:
         from google import genai

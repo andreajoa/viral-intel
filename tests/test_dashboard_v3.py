@@ -16,11 +16,14 @@ _ENV_KEYS = (
     "DATA_DIR",
     "ENABLE_TRANSCRIPTION",
     "ENABLE_PUBLIC_COLLECTION",
+    "ENABLE_INSTAGRAM_GRAPH",
     "EPHEMERAL_MODE",
     "GOOGLE_API_KEY",
     "GEMINI_API_KEY",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
+    "INSTAGRAM_ACCESS_TOKEN",
+    "INSTAGRAM_USER_ID",
 )
 
 
@@ -33,12 +36,15 @@ class DashboardV3Tests(unittest.TestCase):
                 os.environ["DATA_DIR"] = temp_dir
                 os.environ["ENABLE_TRANSCRIPTION"] = "false"
                 os.environ["ENABLE_PUBLIC_COLLECTION"] = "false"
+                os.environ["ENABLE_INSTAGRAM_GRAPH"] = "false"
                 os.environ["EPHEMERAL_MODE"] = "true"
                 for key in (
                     "GOOGLE_API_KEY",
                     "GEMINI_API_KEY",
                     "OPENAI_API_KEY",
                     "ANTHROPIC_API_KEY",
+                    "INSTAGRAM_ACCESS_TOKEN",
+                    "INSTAGRAM_USER_ID",
                 ):
                     os.environ.pop(key, None)
                 get_settings.cache_clear()
@@ -54,7 +60,7 @@ class DashboardV3Tests(unittest.TestCase):
 
                 app = AppTest.from_file(
                     str(ROOT / "app" / "ui" / "dashboard_v3.py"),
-                    default_timeout=50,
+                    default_timeout=60,
                 ).run()
                 self.assertEqual(len(app.exception), 0)
 

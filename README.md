@@ -1,49 +1,79 @@
-# Viral Intel 3.0
+# Viral Intel 4.0
 
-O Viral Intel investiga por que um vídeo, carrossel, imagem ou texto ficou acima ou abaixo do desempenho habitual do próprio perfil. A análise separa rigorosamente quatro camadas:
+O Viral Intel investiga por que um vídeo, carrossel, imagem ou texto ficou acima ou abaixo do desempenho habitual do próprio perfil. A análise não se limita a descrever a arte: ela separa conteúdo, público, conta, distribuição e conversão.
 
-1. **Fatos observados** — números do Insights, comentários públicos e propriedades da mídia.
-2. **Métricas calculadas** — fórmulas transparentes, sem transformar dado ausente em zero.
+## Camadas da investigação
+
+1. **Fatos observados** — mídia, métricas, conta autorizada e comentários disponíveis.
+2. **Métricas calculadas** — fórmulas transparentes, sem transformar ausência em zero.
 3. **Benchmark do perfil** — comparação com posts do mesmo formato e estágio de vida.
-4. **Hipóteses testáveis** — explicações possíveis, sempre com evidência, confiança e limite.
+4. **Inteligência dos comentários** — intenções, perguntas, marcações, linguagem e emoção da amostra.
+5. **Trajetória de distribuição** — elegibilidade, resposta inicial, circulação, não seguidores e conversão.
+6. **Hipóteses testáveis** — explicações concorrentes com confiança, limite e dado necessário para confirmação.
 
-O sistema não promete “decifrar” o código interno de Instagram, TikTok ou YouTube. Ele usa os dados do próprio perfil para decidir entre repetir, iterar, mudar ou reunir mais informação.
+O sistema não afirma conhecer o código interno do Instagram. Feed, Reels, Explorar, Stories e recomendações usam sistemas diferentes. O relatório reconstrói o caminho mais provável apenas a partir das evidências disponíveis.
 
-## Arquitetura de produção
+## Acesso oficial ao Instagram
 
-- Gemini usa análise multimodal com saída estruturada validada por Pydantic.
-- A recuperação da Gemini ocorre em três níveis: saída tipada, Interactions API e JSON validado localmente.
-- O sistema alterna entre modelos compatíveis quando a rota principal falha.
-- OpenAI e Anthropic permanecem disponíveis como provedores alternativos configuráveis.
-- Falhas da IA ou da coleta pública nunca derrubam o relatório completo.
-- O motor determinístico continua entregando cálculos, baseline e limitações quando nenhum provedor responde.
-- Nenhuma chave é mostrada na interface, incluída nos relatórios ou preservada nos erros técnicos.
+Para mídias pertencentes a uma conta profissional autenticada, o painel pode consultar a API oficial da Meta em modo somente leitura. Dependendo das permissões e métricas disponíveis, ele pode obter:
+
+- dados públicos da conta profissional;
+- legenda, formato, data e permalink da publicação;
+- alcance, visualizações, impressões e interações agregadas;
+- compartilhamentos, salvamentos, visitas ao perfil e seguidores atribuídos quando expostos pela API;
+- comentários e usernames dos comentadores retornados pela conta autorizada;
+- publicações recentes para construir um benchmark automático.
+
+A API **não fornece** ao aplicativo:
+
+- a identidade individual de quem curtiu;
+- a identidade de quem salvou ou compartilhou;
+- o score de ranking atribuído a cada pessoa;
+- o peso exato de likes, saves, shares, retenção ou outros sinais;
+- o motivo exato de cada impressão.
+
+Esses limites aparecem no painel e no relatório. O aplicativo nunca tenta contorná-los por scraping invasivo.
+
+### Variáveis opcionais
+
+```env
+ENABLE_INSTAGRAM_GRAPH=true
+INSTAGRAM_ACCESS_TOKEN=seu_token
+INSTAGRAM_USER_ID=id_da_conta_profissional
+INSTAGRAM_API_VERSION=v25.0
+MAX_INSTAGRAM_COMMENTS=300
+INSTAGRAM_HISTORY_LIMIT=20
+```
+
+Também é possível informar token, ID da conta e ID da mídia apenas durante a execução. O token não é gravado no relatório.
 
 ## O que o painel analisa
 
-- Upload direto de vídeo, imagem, captura ou slides.
+- Upload de vídeo, imagem, captura ou slides.
 - Link público complementar do Instagram, TikTok, YouTube, Threads ou Facebook.
-- Métricas privadas do Insights, incluindo alcance, compartilhamentos, salvamentos, retenção e conclusão.
-- Histórico CSV para construir a mediana real do próprio perfil.
-- Vídeo local com FFmpeg: duração, resolução, proporção, FPS, áudio, cortes e frames representativos.
-- Imagens e carrosséis: dimensões, proporção, brilho, entropia visual e leitura multimodal.
-- Perfil por formato, tema, tipo de gancho, CTA, cadência e melhores posts.
+- Acesso oficial opcional a uma conta profissional administrada pelo usuário.
+- Comentários autorizados pela API ou enviados em CSV/JSON.
+- Métricas privadas do Insights, incluindo origem da distribuição e conversão.
+- Histórico CSV ou histórico autorizado para construir a mediana do perfil.
+- Vídeo local com FFmpeg: duração, proporção, FPS, áudio, cortes e frames.
+- Imagens e carrosséis: proporção, composição e leitura multimodal.
 
-Uma captura estática de reel ou vídeo é aceita como **análise parcial**. Nesse caso, o sistema deixa explícito que ritmo, áudio, cortes e retenção temporal não foram medidos. Um único slide de carrossel também é tratado como leitura incompleta, sem inventar o restante da sequência.
+Uma captura estática de Reel ou vídeo continua sendo uma análise parcial. Ela não permite medir ritmo, áudio, cortes ou retenção temporal. Imagens estáticas não possuem uma métrica pública de retenção de leitura equivalente à de vídeo.
 
 ## Resultado entregue
 
-- Interpretação do desempenho com qualidade dos dados visível.
-- Causas prováveis com evidências, confiança e limitações.
-- Plano do próximo conteúdo com ganchos, estrutura, legenda e CTA.
-- Experimentos que alteram uma variável por vez.
-- Ledger de evidências com IDs rastreáveis.
-- Downloads em JSON e Markdown.
-- Diagnóstico técnico de recuperação quando algum provedor falha.
+- conclusão executiva com qualidade dos dados;
+- matriz do que estava e não estava disponível;
+- investigação por etapas da distribuição;
+- causas prováveis com evidências, confiança e limitações;
+- análise visível da peça, público, comentários, conta e histórico;
+- plano do próximo conteúdo com ganchos, estrutura, legenda e CTA;
+- experimentos que alteram uma variável por vez;
+- ledger auditável e downloads em JSON e Markdown.
 
 ## Instalação no Mac
 
-Requisitos: Python 3.11 ou 3.12 e FFmpeg. O instalador detecta Python incompatível e, quando o Homebrew está disponível, instala automaticamente Python 3.12 e FFmpeg.
+Requisitos: Python 3.11 ou 3.12 e FFmpeg.
 
 ```bash
 cd ~/viral-intel
@@ -51,56 +81,49 @@ chmod +x setup.sh run.sh
 ./setup.sh
 ```
 
-Depois, abra `.env` e adicione pelo menos uma chave. Para iniciar:
+Depois, configure ao menos uma chave de IA no `.env` e execute:
 
 ```bash
 cd ~/viral-intel
 ./run.sh
 ```
 
-O navegador abrirá o painel. Não é necessário mover vídeos para uma pasta fixa; os arquivos são enviados diretamente na tela.
-
-O nome da pasta pode ser `viral-intel`, `viral-intel2` ou outro. Os scripts descobrem automaticamente a pasta em que estão. Em Macs Intel, as dependências binárias permanecem compatíveis com Python 3.12 e o PyArrow local é fixado para evitar regressões conhecidas nesse ambiente.
-
 ## Como obter uma análise realmente forte
 
-1. Exporte ou digite as métricas privadas do post.
-2. Envie o vídeo original ou todos os slides na ordem correta.
-3. Envie um CSV com pelo menos 10 posts comparáveis.
-4. Compare números capturados no mesmo estágio: 6h com 6h, 24h com 24h, 7d com 7d.
-5. Depois da recomendação, altere uma variável por vez e acompanhe a métrica definida.
+1. Autorize a conta profissional ou digite os Insights completos.
+2. Envie a mídia original ou todos os slides na ordem.
+3. Forneça comentários exportados quando a API não os retornar.
+4. Use pelo menos 10 posts comparáveis.
+5. Compare snapshots no mesmo estágio: 6h com 6h, 24h com 24h e 7d com 7d.
+6. Confirme elegibilidade no Status da Conta, originalidade e existência de mídia paga.
+7. Teste uma variável por vez após o diagnóstico.
 
-Use `data/profile_template.csv` como modelo. Percentuais devem estar na escala humana: `42.5` significa 42,5%. Células vazias permanecem indisponíveis.
+Percentuais usam escala humana: `42.5` significa 42,5%. Células vazias permanecem indisponíveis.
 
 ## Estrutura
 
 ```text
-app/analysis/       cálculos, baseline, CSV e ledger
+app/analysis/       métricas, comentários, distribuição, benchmark e ledger
 app/ai/             schemas, guardrails e provedores resilientes
 app/media/          inspeção local de vídeo e imagem
-app/online/         coleta pública complementar
+app/online/         API oficial e coleta pública complementar
 app/pipeline/       orquestração tolerante a falhas
 app/reporting/      exportação JSON e Markdown
-app/ui/             painéis Streamlit
-cloud/              entrypoint e dependências de produção
+app/ui/             painel Streamlit
+cloud/              runtime do Streamlit Cloud
 tests/              unidade, integração e smoke tests
 ```
 
 ## Segurança e privacidade
 
-- `.env`, Secrets do Streamlit, ambiente virtual, mídia e relatórios ficam fora do Git.
-- Uploads, frames e relatórios temporários são apagados no modo de nuvem.
-- URLs aceitas são limitadas às plataformas suportadas.
-- A coleta pública é best-effort e nunca substitui os Insights do proprietário.
-- Cookies só devem ser usados em contas e conteúdos autorizados.
-- Erros de provedores têm chaves removidas antes de serem exibidos.
+- `.env`, Secrets, tokens, uploads e relatórios temporários ficam fora do Git.
+- O modo de nuvem apaga uploads, frames e arquivos temporários após a análise.
+- A API oficial é usada somente em contas e mídias autorizadas.
+- Usernames de comentários só aparecem quando já vieram de uma fonte autorizada.
+- Nenhuma característica demográfica ou sensível é inferida a partir de usernames.
+- Chaves e tokens são removidos de mensagens de erro.
 
 ## Validação
-
-O CI executa duas rotas independentes:
-
-1. ambiente completo de desenvolvimento;
-2. ambiente exato do Streamlit Cloud, usando `cloud/requirements.txt`.
 
 ```bash
 python -m ruff check app cloud tests
@@ -110,27 +133,24 @@ python -m compileall -q app cloud tests
 python -m unittest discover -s tests -v
 ```
 
-Os smoke tests abrem `cloud/streamlit_app.py` e fazem um upload real no painel de produção.
+O CI também abre o entrypoint do Streamlit Cloud e realiza um upload real no painel.
 
 ## Deploy no Streamlit Community Cloud
 
 - arquivo principal: `cloud/streamlit_app.py`;
 - Python: 3.12;
 - dependências: `cloud/requirements.txt`;
-- dependência Linux: `packages.txt` com FFmpeg;
-- Secret obrigatório para leitura multimodal: `GOOGLE_API_KEY` na raiz do TOML.
-
-O entrypoint possui uma tela de diagnóstico para falhas de inicialização. O modo de nuvem desativa a transcrição Whisper local para respeitar a memória gratuita e mantém o relatório somente na sessão até o download.
+- Linux: `packages.txt` com FFmpeg;
+- Secret mínimo: `GOOGLE_API_KEY`;
+- Secrets opcionais: `INSTAGRAM_ACCESS_TOKEN` e `INSTAGRAM_USER_ID`.
 
 ## Fontes metodológicas oficiais
 
 - [Instagram — como a classificação funciona](https://about.instagram.com/blog/announcements/instagram-ranking-explained)
 - [Instagram — recomendações e originalidade](https://creators.instagram.com/blog/recommendations-and-originality)
+- [Meta — Instagram API](https://developers.facebook.com/docs/instagram-platform)
 - [Meta — métricas de Insights](https://developers.facebook.com/docs/instagram-platform/reference/instagram-media/insights)
+- [Meta — comentários de mídia](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/comment-moderation)
 - [TikTok — por que um vídeo é recomendado](https://newsroom.tiktok.com/en-us/learn-why-a-video-is-recommended-for-you)
-- [YouTube — alcance, impressões e watch time](https://support.google.com/youtube/answer/9314486)
-- [YouTube — momentos-chave de retenção](https://support.google.com/youtube/answer/9314415)
-- [OpenAI — Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
-- [OpenAI — Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses)
+- [YouTube — alcance e watch time](https://support.google.com/youtube/answer/9314486)
 - [Gemini — saída estruturada](https://ai.google.dev/gemini-api/docs/structured-output)
-- [Anthropic — modelos atuais](https://docs.anthropic.com/en/docs/about-claude/models/overview)
