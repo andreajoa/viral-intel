@@ -78,9 +78,7 @@ def _install_distribution_gate() -> None:
         diagnosis = original(*args, **kwargs)
         stages = diagnosis.get("stages") or []
         supported = [
-            stage
-            for stage in stages
-            if stage.get("status") in {"COMPROVADO", "PLAUSÍVEL", "SINAL_DE_RISCO"}
+            stage for stage in stages if stage.get("status") in {"COMPROVADO", "PLAUSÍVEL", "SINAL_DE_RISCO"}
         ]
         diagnosis["supported_stage_count"] = len(supported)
         diagnosis["has_distribution_evidence"] = bool(supported)
@@ -177,11 +175,7 @@ def _install_strategy_gate() -> None:
             )
             report.format_insights = [
                 insight,
-                *[
-                    item
-                    for item in report.format_insights
-                    if item.title.lower() != insight.title.lower()
-                ],
+                *[item for item in report.format_insights if item.title.lower() != insight.title.lower()],
             ][:5]
 
             hypothesis = CausalHypothesis(
@@ -227,9 +221,7 @@ def _install_strategy_gate() -> None:
                     "O relatório não transforma ausência de métricas em baixo desempenho."
                 )
             else:
-                report.executive_summary = (
-                    "A captura não forneceu elementos criativos ou métricas suficientes para uma conclusão segura."
-                )
+                report.executive_summary = "A captura não forneceu elementos criativos ou métricas suficientes para uma conclusão segura."
         return report, provider, model, errors
 
     ReliableAIStrategist.analyze = guarded_analyze
