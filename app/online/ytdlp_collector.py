@@ -100,9 +100,10 @@ class YTDLPCollector(BaseCollector):
     def fetch_metadata(self, url: str) -> dict[str, Any]:
         """Collect public fields through a resilient source chain.
 
-        Instagram links are attempted through an authenticated public-data source when
-        configured, then through Instagram's public embed page, and finally through
-        yt-dlp. Private Insights such as saves, true retention, non-follower reach and
+        Instagram links are attempted through an authenticated public-data source only
+        when an optional token has been configured, then through Instagram's public
+        embed page, and finally through yt-dlp. The app does not require Apify to run.
+        Private Insights such as saves, true retention, non-follower reach and
         attributed follows remain unavailable for posts not owned by an authorized
         professional account.
         """
@@ -167,7 +168,7 @@ class YTDLPCollector(BaseCollector):
                 "source_notes": [
                     "As fontes automáticas foram bloqueadas ou não expuseram os dados públicos.",
                     "No Instagram Cloud, uma resposta HTTP 429 significa bloqueio/rate limit do IP, não ausência de engajamento.",
-                    "Envie uma captura completa para leitura visual ou configure APIFY_API_TOKEN para links públicos.",
+                    "Envie uma captura completa para leitura visual. Para posts da sua conta, use os Insights oficiais do Instagram.",
                 ],
             }
 
