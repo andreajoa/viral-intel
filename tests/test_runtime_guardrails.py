@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from app.ai.media_observer import MediaObservation, VisibleMetric
-from app.analysis.distribution import build_distribution_diagnosis
+from app.analysis import distribution
 from app.models import BenchmarkResult, ContentFormat, Platform, PostMetrics
 from app.runtime_guardrails import install_production_guardrails
 
@@ -58,7 +58,7 @@ class RuntimeGuardrailTests(unittest.TestCase):
             format=ContentFormat.IMAGE,
             likes=53,
         )
-        diagnosis = build_distribution_diagnosis(
+        diagnosis = distribution.build_distribution_diagnosis(
             metrics=metrics,
             derived={},
             benchmark=BenchmarkResult(),
