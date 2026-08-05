@@ -77,9 +77,7 @@ class ApifyInstagramCollectorTests(unittest.TestCase):
         self.assertEqual(session.calls[1][1]["json"]["resultsType"], "comments")
 
     def test_missing_token_is_explicit(self):
-        result = ApifyInstagramCollector(api_token="").collect(
-            "https://www.instagram.com/p/ABC123/"
-        )
+        result = ApifyInstagramCollector(api_token="").collect("https://www.instagram.com/p/ABC123/")
         self.assertFalse(result["source_ok"])
         self.assertIn("APIFY_API_TOKEN", result["error"])
 
