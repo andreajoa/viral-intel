@@ -78,6 +78,7 @@ class Settings:
     transcription_language: str = field(default_factory=lambda: os.getenv("TRANSCRIPTION_LANGUAGE", "pt"))
     enable_transcription: bool = field(default_factory=lambda: _bool("ENABLE_TRANSCRIPTION", True))
     enable_public_collection: bool = field(default_factory=lambda: _bool("ENABLE_PUBLIC_COLLECTION", True))
+    enable_instagram_embed: bool = field(default_factory=lambda: _bool("ENABLE_INSTAGRAM_EMBED", True))
     ephemeral_mode: bool = field(default_factory=lambda: _bool("EPHEMERAL_MODE", False))
     cookies_file: str = field(default_factory=lambda: os.getenv("COOKIES_FILE", ""))
     command_timeout_seconds: int = field(default_factory=lambda: _int("COMMAND_TIMEOUT_SECONDS", 180, 10))
