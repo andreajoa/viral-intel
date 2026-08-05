@@ -10,9 +10,7 @@ _INSTALLED = False
 
 def _caption_refs(evidence: list[Any]) -> list[str]:
     return [
-        item.id
-        for item in evidence
-        if str(getattr(item, "label", "")).strip().lower() == "public caption"
+        item.id for item in evidence if str(getattr(item, "label", "")).strip().lower() == "public caption"
     ][:4]
 
 
