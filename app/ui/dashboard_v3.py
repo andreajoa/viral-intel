@@ -135,7 +135,9 @@ def format_warning(upload_names: list[str], selected_format: str | None) -> str 
         return None
     actual = media_kind([Path(name) for name in upload_names])
     if actual == "unknown":
-        return "A seleção mistura tipos de mídia ou contém mais de um vídeo. Envie um vídeo ou somente imagens."
+        return (
+            "A seleção mistura tipos de mídia ou contém mais de um vídeo. Envie um vídeo ou somente imagens."
+        )
     if selected_format in {"reel", "short", "video"} and actual == "image":
         return "Captura estática aceita: a leitura criativa funcionará, mas ritmo, áudio e cortes não poderão ser medidos."
     if selected_format == "carousel" and actual == "image":
@@ -153,7 +155,9 @@ def provider_message(report: AnalysisEnvelope) -> None:
     elif report.provider == "deterministic" and report.provider_errors:
         st.warning("A IA não respondeu nesta execução. O relatório foi concluído pelo motor de evidências.")
     elif report.provider == "deterministic":
-        st.info("Relatório determinístico concluído. Configure uma IA para aprofundar a interpretação criativa.")
+        st.info(
+            "Relatório determinístico concluído. Configure uma IA para aprofundar a interpretação criativa."
+        )
     else:
         st.success(f"Análise concluída por {report.provider.title()} ({report.model}).")
 
@@ -191,8 +195,7 @@ def render_data_access(report: AnalysisEnvelope) -> None:
     st.markdown("### Nível real de acesso aos dados")
     st.caption(f"Modo desta execução: {access.get('level', 'não informado')}")
     rows = [
-        {"Dado": label, "Disponível": "Sim" if access.get(key) else "Não"}
-        for key, label in labels.items()
+        {"Dado": label, "Disponível": "Sim" if access.get(key) else "Não"} for key, label in labels.items()
     ]
     st.dataframe(rows, width="stretch", hide_index=True)
     st.info(str(access.get("note") or ""))
@@ -212,9 +215,9 @@ def render_distribution(report: AnalysisEnvelope) -> None:
         st.markdown(
             f"""
             <div class="vi-stage">
-              <strong>{stage.get('stage', 'Etapa')}</strong><br>
+              <strong>{stage.get("stage", "Etapa")}</strong><br>
               <small>{status} · confiança {confidence}%</small>
-              <p>{stage.get('finding', '')}</p>
+              <p>{stage.get("finding", "")}</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -301,7 +304,9 @@ def render_report(report: AnalysisEnvelope) -> None:
     }
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Decisão", labels.get(strategy.repeat_decision, strategy.repeat_decision))
-    c2.metric("Qualidade dos dados", f"{report.data_quality.level} · {report.data_quality.completeness_score}/100")
+    c2.metric(
+        "Qualidade dos dados", f"{report.data_quality.level} · {report.data_quality.completeness_score}/100"
+    )
     c3.metric("Posts comparáveis", report.benchmark.comparable_posts)
     c4.metric(
         "Vs. mediana",
@@ -376,7 +381,16 @@ def render_report(report: AnalysisEnvelope) -> None:
             safe_account = {
                 key: value
                 for key, value in account.items()
-                if key in {"username", "name", "biography", "website", "followers_count", "follows_count", "media_count"}
+                if key
+                in {
+                    "username",
+                    "name",
+                    "biography",
+                    "website",
+                    "followers_count",
+                    "follows_count",
+                    "media_count",
+                }
             }
             st.json(safe_account)
         render_insights("perfil", strategy.profile_insights)
@@ -432,7 +446,9 @@ def render_report(report: AnalysisEnvelope) -> None:
             st.json(report.technical_analysis)
 
     if report.data_quality.missing or report.metrics.source_notes:
-        with st.expander("O que falta para aumentar a precisão", expanded=report.data_quality.level == "BAIXA"):
+        with st.expander(
+            "O que falta para aumentar a precisão", expanded=report.data_quality.level == "BAIXA"
+        ):
             if report.data_quality.missing:
                 st.write("**Dados ausentes:** " + ", ".join(report.data_quality.missing))
             for limitation in report.data_quality.limitations:
@@ -483,9 +499,21 @@ st.markdown(
 
 with st.sidebar:
     st.markdown("## Estado do sistema")
-    st.write(("●" if settings.google_api_key else "○") + " Gemini: " + ("configurada" if settings.google_api_key else "sem chave"))
-    st.write(("●" if shutil.which("ffmpeg") else "○") + " FFmpeg: " + ("disponível" if shutil.which("ffmpeg") else "indisponível"))
-    st.write(("●" if settings.instagram_access_token else "○") + " Instagram API: " + ("configurada" if settings.instagram_access_token else "opcional"))
+    st.write(
+        ("●" if settings.google_api_key else "○")
+        + " Gemini: "
+        + ("configurada" if settings.google_api_key else "sem chave")
+    )
+    st.write(
+        ("●" if shutil.which("ffmpeg") else "○")
+        + " FFmpeg: "
+        + ("disponível" if shutil.which("ffmpeg") else "indisponível")
+    )
+    st.write(
+        ("●" if settings.instagram_access_token else "○")
+        + " Instagram API: "
+        + ("configurada" if settings.instagram_access_token else "opcional")
+    )
     st.write("● Motor de evidências: ativo")
     st.caption("Chaves e tokens nunca são exibidos nem gravados no relatório.")
     st.divider()
@@ -634,9 +662,7 @@ with analysis_tab:
             selected_format = guess_format_from_url(url)
         warning = format_warning([item.name for item in (uploads or [])], selected_format)
         has_official_input = bool(
-            instagram_media_id.strip()
-            or instagram_access_token.strip()
-            or settings.instagram_access_token
+            instagram_media_id.strip() or instagram_access_token.strip() or settings.instagram_access_token
         )
         if warning and "mistura" in warning:
             st.error(warning)
@@ -651,9 +677,7 @@ with analysis_tab:
                 paths = persist_uploads(list(uploads or []))
                 history = profile_posts_from_csv(profile_file.getvalue()) if profile_file else []
                 manual_comments = (
-                    comments_from_file(comments_file.getvalue(), comments_file.name)
-                    if comments_file
-                    else []
+                    comments_from_file(comments_file.getvalue(), comments_file.name) if comments_file else []
                 )
                 captured_at = datetime.now(UTC)
                 published_at = (
@@ -694,7 +718,9 @@ with analysis_tab:
                     "replays": replays,
                     "skip_rate": skip_rate,
                 }
-                with st.spinner("Investigando mídia, público, conta, baseline e trajetória de distribuição..."):
+                with st.spinner(
+                    "Investigando mídia, público, conta, baseline e trajetória de distribuição..."
+                ):
                     report = analyze_content(
                         media_paths=paths,
                         platform=platform_map[platform_label],

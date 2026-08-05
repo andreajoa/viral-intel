@@ -73,9 +73,7 @@ class FakeSession:
                 "profile_visits": 4200,
             }
             if metric in values:
-                return FakeResponse(
-                    {"data": [{"name": metric, "values": [{"value": values[metric]}]}]}
-                )
+                return FakeResponse({"data": [{"name": metric, "values": [{"value": values[metric]}]}]})
             return FakeResponse(
                 {"error": {"message": "Métrica indisponível", "code": 100}},
                 status_code=400,

@@ -70,20 +70,12 @@ def derive_metrics(metrics: PostMetrics) -> dict[str, float]:
         ),
         "profile_visit_rate_by_reach_pct": _percent(metrics.profile_visits, metrics.reach),
         "profile_visit_conversion_pct": _percent(metrics.follows, metrics.profile_visits),
-        "non_follower_reach_calculated_pct": _percent(
-            metrics.non_followers_reach, metrics.reach
-        ),
+        "non_follower_reach_calculated_pct": _percent(metrics.non_followers_reach, metrics.reach),
         "followers_reach_calculated_pct": _percent(metrics.followers_reach, metrics.reach),
         "home_impressions_share_pct": _percent(metrics.home_impressions, metrics.impressions),
-        "explore_impressions_share_pct": _percent(
-            metrics.explore_impressions, metrics.impressions
-        ),
-        "profile_impressions_share_pct": _percent(
-            metrics.profile_impressions, metrics.impressions
-        ),
-        "hashtag_impressions_share_pct": _percent(
-            metrics.hashtag_impressions, metrics.impressions
-        ),
+        "explore_impressions_share_pct": _percent(metrics.explore_impressions, metrics.impressions),
+        "profile_impressions_share_pct": _percent(metrics.profile_impressions, metrics.impressions),
+        "hashtag_impressions_share_pct": _percent(metrics.hashtag_impressions, metrics.impressions),
     }
 
     watch_pct = metrics.average_view_percentage
@@ -95,9 +87,7 @@ def derive_metrics(metrics: PostMetrics) -> dict[str, float]:
     if metrics.age_hours not in (None, 0):
         candidates["average_views_per_hour_since_publish"] = _ratio(metrics.views, metrics.age_hours)
         candidates["average_reach_per_hour_since_publish"] = _ratio(metrics.reach, metrics.age_hours)
-        candidates["average_shares_per_hour_since_publish"] = _ratio(
-            metrics.shares, metrics.age_hours
-        )
+        candidates["average_shares_per_hour_since_publish"] = _ratio(metrics.shares, metrics.age_hours)
 
     for key, value in candidates.items():
         if value is not None:

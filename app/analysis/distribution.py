@@ -74,9 +74,7 @@ def build_distribution_diagnosis(
     data_needed: list[str] = []
 
     recommendation_status = str(
-        technical.get("recommendation_eligibility")
-        or technical.get("account_recommendation_status")
-        or ""
+        technical.get("recommendation_eligibility") or technical.get("account_recommendation_status") or ""
     ).strip()
     original_content = technical.get("original_content")
     if recommendation_status:
@@ -177,9 +175,7 @@ def build_distribution_diagnosis(
     circulation_per_likes = derived.get("circulation_to_likes_pct")
     circulation_vs_comments = derived.get("circulation_to_comments_ratio")
     if circulation_per_likes is not None:
-        finding = (
-            f"Há {_fmt(circulation_per_likes)} ações de circulação conhecidas para cada 100 curtidas"
-        )
+        finding = f"Há {_fmt(circulation_per_likes)} ações de circulação conhecidas para cada 100 curtidas"
         if circulation_vs_comments is not None:
             finding += f", equivalentes a {_fmt(circulation_vs_comments)}× o volume de comentários"
         finding += "."
@@ -294,9 +290,10 @@ def build_distribution_diagnosis(
         sample_size = int(comment_summary.get("sample_size") or 0)
         mention_rate = comment_summary.get("mention_rate_pct")
         intents = comment_summary.get("intent_distribution") or []
-        top_intents = ", ".join(
-            f"{item.get('intent')} ({item.get('count')})" for item in intents[:3]
-        ) or "sem padrão dominante"
+        top_intents = (
+            ", ".join(f"{item.get('intent')} ({item.get('count')})" for item in intents[:3])
+            or "sem padrão dominante"
+        )
         stages.append(
             _stage(
                 "Qualidade da conversa observável",

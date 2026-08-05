@@ -371,9 +371,7 @@ def analyze_content(
         metrics.source_notes.append(f"Coleta pública indisponível: {public['error']}")
     metrics.source_notes.extend(inspection.get("warnings") or [])
 
-    official_history = _official_history(
-        official.get("profile_history") or [], metrics.followers
-    )
+    official_history = _official_history(official.get("profile_history") or [], metrics.followers)
     history = list(profile_history or [])
     if include_instagram_history and official_history:
         known_ids = {post.post_id for post in history if post.post_id}
@@ -397,9 +395,7 @@ def analyze_content(
     if collected.get("caption"):
         technical_context["public_caption"] = collected["caption"]
     if public.get("comments_sample"):
-        technical_context["public_comments_sample"] = normalize_comments(
-            public["comments_sample"], limit=50
-        )
+        technical_context["public_comments_sample"] = normalize_comments(public["comments_sample"], limit=50)
     if official.get("source_ok"):
         technical_context["official_account"] = official.get("account") or {}
         technical_context["official_media"] = official.get("media") or {}
@@ -410,17 +406,11 @@ def analyze_content(
     technical_context["media_warnings"] = inspection.get("warnings") or []
     if distribution_context:
         technical_context.update(
-            {
-                key: value
-                for key, value in distribution_context.items()
-                if value not in (None, "", [], {})
-            }
+            {key: value for key, value in distribution_context.items() if value not in (None, "", [], {})}
         )
     technical_context["recommendation_eligibility"] = metrics.recommendation_eligibility
     technical_context["original_content"] = metrics.is_original
-    technical_context["data_access_report"] = _data_access_report(
-        official, public, comments, history
-    )
+    technical_context["data_access_report"] = _data_access_report(official, public, comments, history)
     technical_context["distribution_diagnosis"] = build_distribution_diagnosis(
         metrics=metrics,
         derived=derived,

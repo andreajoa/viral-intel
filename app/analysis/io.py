@@ -126,9 +126,7 @@ def comments_from_file(raw: bytes | str, filename: str = "") -> list[dict[str, A
                 or lowered_row.get("comentario")
                 or lowered_row.get("comentário")
             ),
-            "likes": parse_optional_number(
-                lowered_row.get("likes") or lowered_row.get("like_count")
-            ),
+            "likes": parse_optional_number(lowered_row.get("likes") or lowered_row.get("like_count")),
             "timestamp": lowered_row.get("timestamp") or lowered_row.get("published_at"),
         }
         if comment["text"]:

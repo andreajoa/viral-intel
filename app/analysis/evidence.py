@@ -82,8 +82,16 @@ DERIVED_LABELS = {
     "like_rate_by_reach_pct": ("Taxa de curtidas por alcance", "%", "curtidas ÷ alcance × 100"),
     "comment_rate_by_views_pct": ("Taxa de comentários por views", "%", "comentários ÷ visualizações × 100"),
     "comment_rate_by_reach_pct": ("Taxa de comentários por alcance", "%", "comentários ÷ alcance × 100"),
-    "share_rate_by_views_pct": ("Taxa de compartilhamento por views", "%", "compartilhamentos ÷ visualizações × 100"),
-    "share_rate_by_reach_pct": ("Taxa de compartilhamento por alcance", "%", "compartilhamentos ÷ alcance × 100"),
+    "share_rate_by_views_pct": (
+        "Taxa de compartilhamento por views",
+        "%",
+        "compartilhamentos ÷ visualizações × 100",
+    ),
+    "share_rate_by_reach_pct": (
+        "Taxa de compartilhamento por alcance",
+        "%",
+        "compartilhamentos ÷ alcance × 100",
+    ),
     "save_rate_by_views_pct": ("Taxa de salvamento por views", "%", "salvamentos ÷ visualizações × 100"),
     "save_rate_by_reach_pct": ("Taxa de salvamento por alcance", "%", "salvamentos ÷ alcance × 100"),
     "replay_rate_by_views_pct": ("Taxa de replay", "%", "replays ÷ visualizações × 100"),
@@ -114,9 +122,21 @@ DERIVED_LABELS = {
         "seguidores alcançados ÷ alcance total × 100",
     ),
     "home_impressions_share_pct": ("Participação do Feed/Home", "%", "impressões no Feed ÷ impressões × 100"),
-    "explore_impressions_share_pct": ("Participação do Explorar", "%", "impressões no Explorar ÷ impressões × 100"),
-    "profile_impressions_share_pct": ("Participação do perfil", "%", "impressões no perfil ÷ impressões × 100"),
-    "hashtag_impressions_share_pct": ("Participação de hashtags", "%", "impressões por hashtags ÷ impressões × 100"),
+    "explore_impressions_share_pct": (
+        "Participação do Explorar",
+        "%",
+        "impressões no Explorar ÷ impressões × 100",
+    ),
+    "profile_impressions_share_pct": (
+        "Participação do perfil",
+        "%",
+        "impressões no perfil ÷ impressões × 100",
+    ),
+    "hashtag_impressions_share_pct": (
+        "Participação de hashtags",
+        "%",
+        "impressões por hashtags ÷ impressões × 100",
+    ),
     "average_views_per_hour_since_publish": (
         "Média de views por hora desde a publicação",
         "views/h",
@@ -248,9 +268,7 @@ def build_evidence(
             observed_index += 1
             item_id, kind = f"O{observed_index}", "observed"
             source = (
-                "API oficial do Instagram"
-                if key.startswith(("official_", "instagram_"))
-                else "link público"
+                "API oficial do Instagram" if key.startswith(("official_", "instagram_")) else "link público"
             )
         elif key == "profile_history_summary":
             benchmark_index += 1

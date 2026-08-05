@@ -38,8 +38,7 @@ MEDIA_FIELDS = (
     "like_count,comments_count,thumbnail_url,media_url"
 )
 ACCOUNT_FIELDS = (
-    "id,username,name,biography,website,followers_count,follows_count,media_count,"
-    "profile_picture_url"
+    "id,username,name,biography,website,followers_count,follows_count,media_count,profile_picture_url"
 )
 
 

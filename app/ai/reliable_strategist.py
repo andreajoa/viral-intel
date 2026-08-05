@@ -273,9 +273,7 @@ def _enrich_forensics(
 
     stages = distribution.get("stages") or []
     useful_stages = [
-        stage
-        for stage in stages
-        if stage.get("status") not in {"NÃO_AVALIÁVEL", "INCONCLUSIVO"}
+        stage for stage in stages if stage.get("status") not in {"NÃO_AVALIÁVEL", "INCONCLUSIVO"}
     ]
     path = _items(distribution.get("likely_distribution_path"), 5)
     strongest = _items(distribution.get("strongest_observed_signals"), 5)
@@ -321,9 +319,10 @@ def _enrich_forensics(
         sample_size = int(comments.get("sample_size") or 0)
         unique = int(comments.get("unique_commenters") or 0)
         intents = comments.get("intent_distribution") or []
-        intent_text = "; ".join(
-            f"{item.get('intent')} ({item.get('share_of_sample_pct')}%)" for item in intents[:4]
-        ) or "sem intenção dominante"
+        intent_text = (
+            "; ".join(f"{item.get('intent')} ({item.get('share_of_sample_pct')}%)" for item in intents[:4])
+            or "sem intenção dominante"
+        )
         finding = (
             f"A amostra contém {sample_size} comentários e {unique} comentadores identificáveis na fonte. "
             f"Padrões mais frequentes: {intent_text}. "
@@ -339,11 +338,7 @@ def _enrich_forensics(
         )
         report.audience_insights = [
             insight,
-            *[
-                item
-                for item in report.audience_insights
-                if item.title.lower() != insight.title.lower()
-            ],
+            *[item for item in report.audience_insights if item.title.lower() != insight.title.lower()],
         ][:5]
 
     if account:
@@ -369,11 +364,7 @@ def _enrich_forensics(
         )
         report.profile_insights = [
             insight,
-            *[
-                item
-                for item in report.profile_insights
-                if item.title.lower() != insight.title.lower()
-            ],
+            *[item for item in report.profile_insights if item.title.lower() != insight.title.lower()],
         ][:5]
 
     access_level = str(access.get("level") or "upload_and_manual_only")
@@ -383,9 +374,7 @@ def _enrich_forensics(
     )
     if access_caveat not in report.caveats:
         report.caveats = [access_caveat, *report.caveats][:8]
-    algorithm_caveat = (
-        "O relatório reconstrói uma trajetória provável por superfícies e sinais observáveis; não conhece os pesos internos nem o score atribuído a cada usuário."
-    )
+    algorithm_caveat = "O relatório reconstrói uma trajetória provável por superfícies e sinais observáveis; não conhece os pesos internos nem o score atribuído a cada usuário."
     if algorithm_caveat not in report.caveats:
         report.caveats = [algorithm_caveat, *report.caveats][:8]
 
