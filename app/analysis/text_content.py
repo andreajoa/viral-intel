@@ -86,9 +86,7 @@ def analyze_text_content(text: str) -> dict[str, Any]:
     if not mechanisms:
         mechanisms.append("afirmação direta com leitura imediata")
 
-    emotions = [
-        label for label, terms in _EMOTION_TERMS.items() if _contains_any(lowered, terms)
-    ][:5]
+    emotions = [label for label, terms in _EMOTION_TERMS.items() if _contains_any(lowered, terms)][:5]
     if not emotions:
         emotions = ["curiosidade"] if "?" in cleaned else ["identificação"]
 
@@ -129,11 +127,7 @@ def analyze_text_content(text: str) -> dict[str, Any]:
     if len(sentences) <= 1:
         risks.append("a estrutura depende de uma única frase e oferece pouca progressão")
 
-    summary = (
-        "Leitura textual de uma publicação que apresenta "
-        + ", ".join(mechanisms[:3])
-        + "."
-    )
+    summary = "Leitura textual de uma publicação que apresenta " + ", ".join(mechanisms[:3]) + "."
     promise = (
         "reconhecimento emocional e interpretação de uma situação vivida"
         if any(item in emotions for item in ("traição", "rejeição", "saudade", "afeto"))
