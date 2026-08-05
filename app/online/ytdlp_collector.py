@@ -95,9 +95,7 @@ class YTDLPCollector(BaseCollector):
     def _instagram_embed(self, url: str) -> dict[str, Any]:
         if not self.settings.enable_instagram_embed or not self._is_instagram(url):
             return {}
-        return InstagramEmbedCollector(
-            timeout=min(self.settings.command_timeout_seconds, 45)
-        ).collect(url)
+        return InstagramEmbedCollector(timeout=min(self.settings.command_timeout_seconds, 45)).collect(url)
 
     def fetch_metadata(self, url: str) -> dict[str, Any]:
         """Collect public fields through a resilient source chain.
@@ -129,9 +127,7 @@ class YTDLPCollector(BaseCollector):
                 if source_errors:
                     embed_result.setdefault("source_notes", []).extend(source_errors)
                 return embed_result
-            source_errors.append(
-                "Embed público: " + str(embed_result.get("error") or "embed público falhou")
-            )
+            source_errors.append("Embed público: " + str(embed_result.get("error") or "embed público falhou"))
 
         try:
             import yt_dlp
