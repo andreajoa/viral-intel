@@ -99,9 +99,7 @@ class ApifyInstagramCollector:
         return f"{type(exc).__name__}: {detail[:400]}"
 
     def _run(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
-        endpoint = (
-            f"https://api.apify.com/v2/acts/{self.actor_id}/run-sync-get-dataset-items"
-        )
+        endpoint = f"https://api.apify.com/v2/acts/{self.actor_id}/run-sync-get-dataset-items"
         response = self.session.post(
             endpoint,
             params={
@@ -208,9 +206,7 @@ class ApifyInstagramCollector:
             }
             account = {key: value for key, value in account.items() if value is not None}
 
-            shares = _first_present(
-                post.get("sharesCount"), post.get("shareCount"), post.get("reshareCount")
-            )
+            shares = _first_present(post.get("sharesCount"), post.get("shareCount"), post.get("reshareCount"))
             reposts = _first_present(post.get("repostsCount"), post.get("repostCount"))
             source_notes = [
                 "Dados públicos coletados por uma API de scraping configurada; são uma fotografia parcial e podem mudar.",
@@ -237,9 +233,7 @@ class ApifyInstagramCollector:
                     post.get("viewsCount"),
                 ),
                 "likes": _first_present(post.get("likesCount"), post.get("likeCount")),
-                "comments_count": _first_present(
-                    post.get("commentsCount"), post.get("commentCount")
-                ),
+                "comments_count": _first_present(post.get("commentsCount"), post.get("commentCount")),
                 "shares": shares,
                 "reposts": reposts,
                 "published_at": _as_datetime(
