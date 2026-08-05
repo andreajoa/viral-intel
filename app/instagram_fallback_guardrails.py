@@ -81,11 +81,7 @@ def _reconcile_manual_text_report(report: Any) -> None:
 
     strategy = StrategicReport.model_validate(report.strategy)
     lowered = strategy.executive_summary.lower()
-    refs = [
-        item.id
-        for item in report.evidence
-        if str(item.label or "").lower().startswith("creative ")
-    ][:8]
+    refs = [item.id for item in report.evidence if str(item.label or "").lower().startswith("creative ")][:8]
 
     if "não forneceu elementos criativos" in lowered or "captura não forneceu" in lowered:
         strategy.executive_summary = (
