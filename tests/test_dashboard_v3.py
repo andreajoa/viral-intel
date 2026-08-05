@@ -75,9 +75,7 @@ class DashboardV3Tests(unittest.TestCase):
                 self.assertEqual(len(app.exception), 0)
                 self.assertEqual(len(app.error), 0)
                 metric_labels = {item.label for item in app.metric}
-                self.assertTrue(
-                    {"Qualidade dos dados", "Dados de distribuição"} & metric_labels
-                )
+                self.assertTrue({"Qualidade dos dados", "Dados de distribuição"} & metric_labels)
                 downloads = [item.label for item in app.get("download_button")]
                 self.assertIn("Baixar relatório completo (.json)", downloads)
                 self.assertIn("Baixar relatório para leitura (.md)", downloads)
