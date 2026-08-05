@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from app.config import Settings, get_settings
 from app.online.apify_instagram import ApifyInstagramCollector
 from app.online.base import BaseCollector
+from app.online.instagram_embed import InstagramEmbedCollector
 
 logger = logging.getLogger(__name__)
 
@@ -91,33 +92,51 @@ class YTDLPCollector(BaseCollector):
         )
         return collector.collect(url, include_comments=True)
 
+    def _instagram_embed(self, url: str) -> dict[str, Any]:
+        if not self.settings.enable_instagram_embed or not self._is_instagram(url):
+            return {}
+        return InstagramEmbedCollector(
+            timeout=min(self.settings.command_timeout_seconds, 45)
+        ).collect(url)
+
     def fetch_metadata(self, url: str) -> dict[str, Any]:
         """Collect public fields through a resilient source chain.
 
-        For Instagram, a configured authenticated public-data provider is attempted
-        first because cloud IPs are frequently blocked or rate-limited by Instagram.
-        yt-dlp remains the fallback for all supported platforms. Private Insights such
-        as saves, true retention, non-follower reach and attributed follows remain
-        unavailable for posts not owned by an authorized professional account.
+        Instagram links are attempted through an authenticated public-data source when
+        configured, then through Instagram's public embed page, and finally through
+        yt-dlp. Private Insights such as saves, true retention, non-follower reach and
+        attributed follows remain unavailable for posts not owned by an authorized
+        professional account.
         """
 
         if not self.settings.enable_public_collection:
             return {"source_ok": False, "error": "Coleta pública desativada", "source_notes": []}
         checked_url = self.validate_url(url)
+        source_errors: list[str] = []
 
         provider_result = self._apify_instagram(checked_url)
-        provider_error = ""
         if provider_result:
             if provider_result.get("source_ok"):
                 return provider_result
-            provider_error = str(provider_result.get("error") or "fonte pública autenticada falhou")
+            source_errors.append(
+                "API pública autenticada: "
+                + str(provider_result.get("error") or "fonte pública autenticada falhou")
+            )
+
+        embed_result = self._instagram_embed(checked_url)
+        if embed_result:
+            if embed_result.get("source_ok"):
+                if source_errors:
+                    embed_result.setdefault("source_notes", []).extend(source_errors)
+                return embed_result
+            source_errors.append(
+                "Embed público: " + str(embed_result.get("error") or "embed público falhou")
+            )
 
         try:
             import yt_dlp
         except ImportError:
-            notes = ["Preencha as métricas manualmente com dados do Insights."]
-            if provider_error:
-                notes.insert(0, f"Fonte pública autenticada indisponível: {provider_error}")
+            notes = [*source_errors, "Preencha as métricas manualmente com dados do Insights."]
             return {
                 "source_ok": False,
                 "error": "yt-dlp não está instalado",
@@ -139,21 +158,15 @@ class YTDLPCollector(BaseCollector):
             with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(checked_url, download=False) or {}
             result = self._normalize_metadata(info, checked_url)
-            if provider_error:
-                result["source_notes"].append(
-                    "A fonte pública autenticada falhou e a coleta foi recuperada pelo yt-dlp: "
-                    + provider_error
-                )
+            if source_errors:
+                result["source_notes"].extend(source_errors)
             return result
         except Exception as exc:
             logger.warning("Public metadata collection failed for %s: %s", checked_url, exc)
-            errors = []
-            if provider_error:
-                errors.append(f"API pública autenticada: {provider_error}")
-            errors.append(f"yt-dlp: {type(exc).__name__}: {str(exc)[:300]}")
+            source_errors.append(f"yt-dlp: {type(exc).__name__}: {str(exc)[:300]}")
             return {
                 "source_ok": False,
-                "error": " | ".join(errors),
+                "error": " | ".join(source_errors),
                 "webpage_url": checked_url,
                 "source_notes": [
                     "As fontes automáticas foram bloqueadas ou não expuseram os dados públicos.",
