@@ -54,16 +54,11 @@ class LinkContentGuardrailTests(unittest.TestCase):
         self.assertIn("legenda pública foi analisada", report.executive_summary.lower())
         self.assertIn("Diagnóstico textual: disponível", report.performance_interpretation)
         self.assertNotIn("não forneceu elementos criativos", report.executive_summary.lower())
-        self.assertTrue(
-            any(item.title == "Síntese da leitura textual" for item in report.format_insights)
-        )
-        self.assertTrue(
-            any(item.title == "Alcance real desta análise" for item in report.format_insights)
-        )
+        self.assertTrue(any(item.title == "Síntese da leitura textual" for item in report.format_insights))
+        self.assertTrue(any(item.title == "Alcance real desta análise" for item in report.format_insights))
         self.assertTrue(
             any(
-                item.title == "Mecanismo textual provável de ressonância"
-                and item.judgment == "PLAUSÍVEL"
+                item.title == "Mecanismo textual provável de ressonância" and item.judgment == "PLAUSÍVEL"
                 for item in report.root_cause_hypotheses
             )
         )
