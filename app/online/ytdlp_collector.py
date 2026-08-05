@@ -9,7 +9,9 @@ from typing import Any
 from urllib.parse import urlparse
 
 from app.config import Settings, get_settings
+from app.online.apify_instagram import ApifyInstagramCollector
 from app.online.base import BaseCollector
+from app.online.instagram_embed import InstagramEmbedCollector
 
 logger = logging.getLogger(__name__)
 
@@ -74,23 +76,67 @@ class YTDLPCollector(BaseCollector):
             raise ValueError("O link precisa ser do Instagram, TikTok, YouTube, Threads ou Facebook.")
         return url.strip()
 
-    def fetch_metadata(self, url: str) -> dict[str, Any]:
-        """Collect only fields publicly returned by yt-dlp.
+    @staticmethod
+    def _is_instagram(url: str) -> bool:
+        host = (urlparse(url).hostname or "").lower()
+        return host == "instagram.com" or host.endswith(".instagram.com")
 
-        Public collection cannot expose private Insights such as saves, true retention,
-        non-follower reach, or attributed follows.  Those fields remain missing.
+    def _apify_instagram(self, url: str) -> dict[str, Any]:
+        if not self.settings.apify_api_token or not self._is_instagram(url):
+            return {}
+        collector = ApifyInstagramCollector(
+            api_token=self.settings.apify_api_token,
+            actor_id=self.settings.apify_instagram_actor,
+            max_comments=self.settings.max_public_comments,
+            timeout=self.settings.command_timeout_seconds,
+        )
+        return collector.collect(url, include_comments=True)
+
+    def _instagram_embed(self, url: str) -> dict[str, Any]:
+        if not self.settings.enable_instagram_embed or not self._is_instagram(url):
+            return {}
+        return InstagramEmbedCollector(timeout=min(self.settings.command_timeout_seconds, 45)).collect(url)
+
+    def fetch_metadata(self, url: str) -> dict[str, Any]:
+        """Collect public fields through a resilient source chain.
+
+        Instagram links are attempted through an authenticated public-data source when
+        configured, then through Instagram's public embed page, and finally through
+        yt-dlp. Private Insights such as saves, true retention, non-follower reach and
+        attributed follows remain unavailable for posts not owned by an authorized
+        professional account.
         """
 
         if not self.settings.enable_public_collection:
             return {"source_ok": False, "error": "Coleta pública desativada", "source_notes": []}
         checked_url = self.validate_url(url)
+        source_errors: list[str] = []
+
+        provider_result = self._apify_instagram(checked_url)
+        if provider_result:
+            if provider_result.get("source_ok"):
+                return provider_result
+            source_errors.append(
+                "API pública autenticada: "
+                + str(provider_result.get("error") or "fonte pública autenticada falhou")
+            )
+
+        embed_result = self._instagram_embed(checked_url)
+        if embed_result:
+            if embed_result.get("source_ok"):
+                if source_errors:
+                    embed_result.setdefault("source_notes", []).extend(source_errors)
+                return embed_result
+            source_errors.append("Embed público: " + str(embed_result.get("error") or "embed público falhou"))
+
         try:
             import yt_dlp
         except ImportError:
+            notes = [*source_errors, "Preencha as métricas manualmente com dados do Insights."]
             return {
                 "source_ok": False,
                 "error": "yt-dlp não está instalado",
-                "source_notes": ["Preencha as métricas manualmente com dados do Insights."],
+                "source_notes": notes,
             }
 
         options: dict[str, Any] = {
@@ -107,15 +153,21 @@ class YTDLPCollector(BaseCollector):
         try:
             with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(checked_url, download=False) or {}
-            return self._normalize_metadata(info, checked_url)
+            result = self._normalize_metadata(info, checked_url)
+            if source_errors:
+                result["source_notes"].extend(source_errors)
+            return result
         except Exception as exc:
             logger.warning("Public metadata collection failed for %s: %s", checked_url, exc)
+            source_errors.append(f"yt-dlp: {type(exc).__name__}: {str(exc)[:300]}")
             return {
                 "source_ok": False,
-                "error": f"{type(exc).__name__}: {str(exc)[:300]}",
+                "error": " | ".join(source_errors),
                 "webpage_url": checked_url,
                 "source_notes": [
-                    "A plataforma bloqueou ou não expôs os dados públicos. Use os números do Insights."
+                    "As fontes automáticas foram bloqueadas ou não expuseram os dados públicos.",
+                    "No Instagram Cloud, uma resposta HTTP 429 significa bloqueio/rate limit do IP, não ausência de engajamento.",
+                    "Envie uma captura completa para leitura visual ou configure APIFY_API_TOKEN para links públicos.",
                 ],
             }
 

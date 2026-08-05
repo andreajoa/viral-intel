@@ -12,6 +12,15 @@ from app.config import Settings
 
 logger = logging.getLogger(__name__)
 
+METRIC_FOCUS = """
+
+SEGUNDA VERIFICAÇÃO OBRIGATÓRIA DE MÉTRICAS VISÍVEIS:
+Examine novamente cada imagem, principalmente a faixa imediatamente abaixo do post.
+Procure coração com número, balão com número, setas circulares com número e contagem de
+visualizações. Converta K/mil/M para inteiro. Não confunda setas circulares com avião de
+papel. Se houver contagens legíveis, visible_metrics não pode ficar vazio.
+"""
+
 
 def _models(settings: Settings) -> list[str]:
     ordered = [
@@ -43,6 +52,21 @@ def _parse_response(response: Any) -> MediaObservation:
         return MediaObservation.model_validate(_extract_json(text))
 
 
+def _merge_focused_metrics(
+    original: MediaObservation,
+    focused: MediaObservation,
+) -> MediaObservation:
+    if not focused.visible_metrics:
+        return original
+    updates: dict[str, Any] = {"visible_metrics": focused.visible_metrics}
+    if original.asset_type in {"unknown", "image"} and focused.asset_type == "social_screenshot":
+        updates["asset_type"] = "social_screenshot"
+    combined_limitations = list(dict.fromkeys([*original.limitations, *focused.limitations]))
+    if combined_limitations:
+        updates["limitations"] = combined_limitations[:10]
+    return original.model_copy(update=updates)
+
+
 def observe_media(
     *,
     settings: Settings,
@@ -66,8 +90,25 @@ def observe_media(
     request_text = (
         OBSERVATION_PROMPT + "\n\nCONTEXTO TÉCNICO:\n" + json.dumps(context, ensure_ascii=False, default=str)
     )
-    contents: list[Any] = [request_text]
-    contents.extend(types.Part.from_bytes(data=image, mime_type="image/jpeg") for image in images)
+
+    def contents_for(text: str) -> list[Any]:
+        contents: list[Any] = [text]
+        contents.extend(types.Part.from_bytes(data=image, mime_type="image/jpeg") for image in images)
+        return contents
+
+    def focused_retry(client: Any, model: str, original: MediaObservation) -> MediaObservation:
+        if original.visible_metrics:
+            return original
+        response = client.models.generate_content(
+            model=model,
+            contents=contents_for(request_text + METRIC_FOCUS),
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=MediaObservation,
+                max_output_tokens=min(settings.max_ai_output_tokens, 12000),
+            ),
+        )
+        return _merge_focused_metrics(original, _parse_response(response))
 
     errors: list[str] = []
     client = genai.Client(api_key=settings.google_api_key)
@@ -76,14 +117,22 @@ def observe_media(
             try:
                 response = client.models.generate_content(
                     model=model,
-                    contents=contents,
+                    contents=contents_for(request_text),
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         response_schema=MediaObservation,
                         max_output_tokens=min(settings.max_ai_output_tokens, 12000),
                     ),
                 )
-                return _parse_response(response), errors, model
+                observation = _parse_response(response)
+                try:
+                    observation = focused_retry(client, model, observation)
+                except Exception as metric_exc:
+                    errors.append(
+                        f"segunda leitura de métricas {model}: "
+                        + _sanitize_error(metric_exc, settings.google_api_key)
+                    )
+                return observation, errors, model
             except Exception as structured_exc:
                 errors.append(
                     f"observação estruturada {model}: "
@@ -93,13 +142,21 @@ def observe_media(
             try:
                 response = client.models.generate_content(
                     model=model,
-                    contents=contents,
+                    contents=contents_for(request_text),
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         max_output_tokens=min(settings.max_ai_output_tokens, 12000),
                     ),
                 )
-                return _parse_response(response), errors, model
+                observation = _parse_response(response)
+                try:
+                    observation = focused_retry(client, model, observation)
+                except Exception as metric_exc:
+                    errors.append(
+                        f"segunda leitura de métricas {model}: "
+                        + _sanitize_error(metric_exc, settings.google_api_key)
+                    )
+                return observation, errors, model
             except Exception as json_exc:
                 errors.append(
                     f"observação JSON {model}: " + _sanitize_error(json_exc, settings.google_api_key)

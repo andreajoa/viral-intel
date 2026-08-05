@@ -54,7 +54,11 @@ class CollectorTests(unittest.TestCase):
             patch.dict(sys.modules, {"yt_dlp": fake_module}, clear=False),
         ):
             root = Path(temp)
-            settings = Settings(data_dir=root / "data", local_media_dir=root / "media")
+            settings = Settings(
+                data_dir=root / "data",
+                local_media_dir=root / "media",
+                enable_instagram_embed=False,
+            )
             result = YTDLPCollector(settings=settings).fetch_metadata("https://www.instagram.com/p/abc123/")
 
         self.assertTrue(result["source_ok"])
@@ -86,12 +90,17 @@ class CollectorTests(unittest.TestCase):
             patch.dict(sys.modules, {"yt_dlp": fake_module}, clear=False),
         ):
             root = Path(temp)
-            settings = Settings(data_dir=root / "data", local_media_dir=root / "media")
+            settings = Settings(
+                data_dir=root / "data",
+                local_media_dir=root / "media",
+                enable_instagram_embed=False,
+            )
             result = YTDLPCollector(settings=settings).fetch_metadata("https://www.instagram.com/p/abc123/")
 
         self.assertFalse(result["source_ok"])
         self.assertIn("RuntimeError", result["error"])
-        self.assertIn("Insights", result["source_notes"][0])
+        self.assertTrue(any("bloqueadas" in note for note in result["source_notes"]))
+        self.assertTrue(any("captura" in note for note in result["source_notes"]))
 
 
 if __name__ == "__main__":

@@ -78,9 +78,16 @@ class Settings:
     transcription_language: str = field(default_factory=lambda: os.getenv("TRANSCRIPTION_LANGUAGE", "pt"))
     enable_transcription: bool = field(default_factory=lambda: _bool("ENABLE_TRANSCRIPTION", True))
     enable_public_collection: bool = field(default_factory=lambda: _bool("ENABLE_PUBLIC_COLLECTION", True))
+    enable_instagram_embed: bool = field(default_factory=lambda: _bool("ENABLE_INSTAGRAM_EMBED", True))
     ephemeral_mode: bool = field(default_factory=lambda: _bool("EPHEMERAL_MODE", False))
     cookies_file: str = field(default_factory=lambda: os.getenv("COOKIES_FILE", ""))
     command_timeout_seconds: int = field(default_factory=lambda: _int("COMMAND_TIMEOUT_SECONDS", 180, 10))
+
+    apify_api_token: str = field(default_factory=lambda: os.getenv("APIFY_API_TOKEN", ""))
+    apify_instagram_actor: str = field(
+        default_factory=lambda: os.getenv("APIFY_INSTAGRAM_ACTOR", "apify~instagram-scraper")
+    )
+    max_public_comments: int = field(default_factory=lambda: _int("MAX_PUBLIC_COMMENTS", 50, 1))
 
     enable_instagram_graph: bool = field(default_factory=lambda: _bool("ENABLE_INSTAGRAM_GRAPH", True))
     instagram_access_token: str = field(default_factory=lambda: os.getenv("INSTAGRAM_ACCESS_TOKEN", ""))
