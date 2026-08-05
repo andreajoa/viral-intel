@@ -66,7 +66,9 @@ class MediaObservation(BaseModel):
     def normalize_format_confidence(cls, value: Any) -> int:
         return _confidence_percent(value)
 
-    def metrics_for_prefill(self, minimum_confidence: int = 90) -> dict[str, int]:
+    def metrics_for_prefill(self, minimum_confidence: int = 75) -> dict[str, int]:
+        """Return legible screenshot counts without requiring artificial 90% certainty."""
+
         values: dict[str, int] = {}
         for item in self.visible_metrics:
             if item.metric == "unknown" or item.value is None or item.confidence < minimum_confidence:
@@ -121,6 +123,9 @@ transcrição/contexto técnico. Não avalie se viralizou e não invente alcance
 salvamentos, intenção do autor ou reação do público.
 
 Regras importantes:
+- Examine a imagem inteira, inclusive cabeçalho, rodapé e a faixa de ícones abaixo da publicação.
+- Diferencie uma arte isolada de uma captura de tela de rede social. Se houver interface,
+  ícones de interação, username ou contagens, use asset_type="social_screenshot".
 - Transcreva os textos principais exatamente como aparecem.
 - Identifique o mecanismo do gancho: curiosidade, tensão, identidade, ameaça, promessa,
   contraste, especificidade, controvérsia etc. Isso é descrição criativa, não causa provada.
@@ -129,8 +134,14 @@ Regras importantes:
 - Métricas só podem ser extraídas quando número e ícone/rótulo estiverem legíveis.
 - No Instagram, coração=likes, balão=comments, setas circulares=reposts. O avião de papel
   sem número não autoriza inferir shares. Use unknown quando o ícone for ambíguo.
+- Converta abreviações para inteiros: 33.8K ou 33,8 mil = 33800; 5.4K = 5400; 1.2M = 1200000.
+  Preserve o texto original em displayed_text e coloque o número convertido em value.
+- Não confunda reposts públicos com compartilhamentos/envios privados. Se o número estiver
+  junto às setas circulares, a métrica é reposts, nunca shares.
 - Para cada métrica visível, informe a evidência visual e a confiança. Nunca converta
   ausência em zero.
+- Uma contagem legível acompanhada do ícone correto normalmente merece confiança entre
+  85 e 100. Não reduza a confiança apenas porque o dado veio de uma captura.
 - Toda confiança deve ser um número inteiro de 0 a 100; use 100 para certeza visual,
   nunca 1 como abreviação de 100%.
 - Escreva os campos textuais e todas as listas em português natural.
