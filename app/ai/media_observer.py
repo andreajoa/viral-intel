@@ -193,8 +193,8 @@ def observe_media(
         "transcription": transcription or "INDISPONÍVEL",
         "images_sent": len(images),
     }
-    request_text = OBSERVATION_PROMPT + "\n\nCONTEXTO:\n" + json.dumps(
-        context, ensure_ascii=False, default=str
+    request_text = (
+        OBSERVATION_PROMPT + "\n\nCONTEXTO:\n" + json.dumps(context, ensure_ascii=False, default=str)
     )
     errors: list[str] = []
     client = genai.Client(api_key=settings.google_api_key)
