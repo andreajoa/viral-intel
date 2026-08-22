@@ -10,9 +10,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.ai.schema import CausalHypothesis, StrategicReport
 from app.models import BenchmarkResult, EvidenceItem, PostMetrics
 
+from .schema import CausalHypothesis, StrategicReport
 
 RULES = (
     (
