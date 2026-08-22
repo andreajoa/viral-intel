@@ -299,7 +299,11 @@ class InstagramGraphCollector:
         history_limit: int = 20,
     ) -> dict[str, Any]:
         if not self.configured:
-            return {"source_ok": False, "error": "Token da Instagram API não configurado.", "source_notes": []}
+            return {
+                "source_ok": False,
+                "error": "Token da Instagram API não configurado.",
+                "source_notes": [],
+            }
         try:
             resolved_id = media_id.strip() or self.resolve_media_id(permalink) or ""
             if not resolved_id:
