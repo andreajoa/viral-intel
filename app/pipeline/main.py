@@ -6,6 +6,7 @@ import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 from app.ai.reliable_media_observer import observe_media
@@ -13,15 +14,17 @@ from app.ai.reliable_strategist import ReliableAIStrategist
 from app.analysis.comment_intelligence import analyze_comments, normalize_comments
 from app.analysis.distribution import build_distribution_diagnosis
 from app.analysis.evidence import build_evidence
+from app.analysis.fingerprint import build_content_fingerprint, rank_content_twins
 from app.analysis.io import merge_metric_sources
 from app.analysis.metrics import assess_data_quality, derive_metrics
-from app.analysis.profile import build_benchmark, summarize_profile
+from app.analysis.profile import build_benchmark, lifecycle_bucket, summarize_profile
 from app.config import Settings, get_settings
 from app.media.inspector import MediaInspector, media_kind
 from app.models import AnalysisEnvelope, ContentFormat, Platform, PostMetrics
 from app.online.instagram_graph import InstagramGraphCollector
 from app.online.ytdlp_collector import YTDLPCollector
 from app.reporting.exporter import save_report
+from app.storage import IntelligenceStore
 
 AIStrategist = ReliableAIStrategist
 
@@ -94,22 +97,12 @@ def _collect_public(url: str, settings: Settings) -> dict[str, Any]:
     if not clean_url:
         return {}
     if not settings.enable_public_collection:
-        return {
-            "source_ok": False,
-            "error": "A coleta pública está desativada neste ambiente.",
-        }
+        return {"source_ok": False, "error": "A coleta pública está desativada neste ambiente."}
     try:
         result = YTDLPCollector(settings=settings).fetch_metadata(clean_url)
-        return (
-            result
-            if isinstance(result, dict)
-            else {"source_ok": False, "error": "Resposta pública inválida."}
-        )
+        return result if isinstance(result, dict) else {"source_ok": False, "error": "Resposta pública inválida."}
     except Exception as exc:
-        return {
-            "source_ok": False,
-            "error": f"{type(exc).__name__}: {str(exc)[:220]}",
-        }
+        return {"source_ok": False, "error": f"{type(exc).__name__}: {str(exc)[:220]}"}
 
 
 def _collect_instagram_official(
@@ -197,13 +190,7 @@ def _data_access_report(
     official_ok = bool(official.get("source_ok"))
     public_ok = bool(public.get("source_ok"))
     return {
-        "level": (
-            "official_authorized"
-            if official_ok
-            else "public_partial"
-            if public_ok
-            else "upload_and_manual_only"
-        ),
+        "level": "official_authorized" if official_ok else "public_partial" if public_ok else "upload_and_manual_only",
         "official_private_insights": official_ok,
         "account_metadata": bool(official.get("account")),
         "comment_texts": bool(comments),
@@ -214,14 +201,102 @@ def _data_access_report(
         "individual_saver_identities": False,
         "ranking_model_weights": False,
         "note": (
-            "A API oficial pode fornecer métricas agregadas e comentários de mídia pertencente à conta "
-            "profissional autenticada. Ela não fornece a lista de pessoas que curtiram, salvaram ou compartilharam."
+            "A API oficial pode fornecer métricas agregadas e comentários de mídia pertencente à conta profissional "
+            "autenticada. Ela não fornece a lista de pessoas que curtiram, salvaram ou compartilharam."
         ),
     }
 
 
+def _profile_key(explicit: str, official: dict[str, Any], metrics: PostMetrics) -> str:
+    if explicit.strip():
+        return explicit.strip()
+    account = official.get("account") or {}
+    account_id = str(account.get("id") or "").strip()
+    username = str(account.get("username") or "").strip().lower()
+    if account_id:
+        return f"{metrics.platform.value}:id:{account_id}"
+    if username:
+        return f"{metrics.platform.value}:@{username}"
+    return ""
+
+
+def _post_key(metrics: PostMetrics, report_id: str) -> str:
+    if metrics.post_id:
+        return str(metrics.post_id)
+    if metrics.post_url:
+        return metrics.post_url.strip().rstrip("/")
+    return report_id
+
+
+def _stored_history(rows: list[dict[str, Any]], target: PostMetrics) -> list[PostMetrics]:
+    """Use at most one snapshot per historical post, closest to the target lifecycle."""
+
+    chosen: dict[str, tuple[float, PostMetrics]] = {}
+    target_age = target.age_hours
+    for row in rows:
+        try:
+            post = PostMetrics.model_validate(row.get("metrics") or {})
+        except Exception:
+            continue
+        if target.post_id and post.post_id == target.post_id:
+            continue
+        key = post.post_id or str(row.get("post_id") or row.get("report_id") or "")
+        if not key:
+            continue
+        if target_age is None or post.age_hours is None:
+            distance = 0.0 if key not in chosen else 1.0
+        else:
+            distance = abs(post.age_hours - target_age)
+            if lifecycle_bucket(post.age_hours) == lifecycle_bucket(target_age):
+                distance *= 0.25
+        current = chosen.get(key)
+        if current is None or distance < current[0]:
+            chosen[key] = (distance, post)
+    return [item[1] for item in chosen.values()]
+
+
+def _gate_distribution(diagnosis: dict[str, Any]) -> dict[str, Any]:
+    """Prevent empty/inconclusive stages from being presented as causal reconstruction."""
+
+    stages = diagnosis.get("stages") or []
+    supported = [
+        stage for stage in stages if stage.get("status") in {"COMPROVADO", "PLAUSÍVEL", "SINAL_DE_RISCO"}
+    ]
+    diagnosis["supported_stage_count"] = len(supported)
+    diagnosis["has_distribution_evidence"] = bool(supported)
+    if supported:
+        diagnosis["stages"] = supported
+    else:
+        diagnosis["stages"] = []
+        diagnosis["likely_distribution_path"] = []
+        diagnosis["strongest_observed_signals"] = []
+        diagnosis["counter_signals_or_risks"] = []
+        diagnosis["verdict"] = (
+            "A peça pode ser analisada, mas não há métricas suficientes para reconstruir a distribuição. "
+            "Ausência de dado não significa baixa entrega."
+        )
+    return diagnosis
+
+
+def _twin_summary(twins: list[dict[str, Any]]) -> dict[str, Any]:
+    if not twins:
+        return {"available": False, "count": 0}
+    metrics = [item.get("metrics") or {} for item in twins]
+    summary: dict[str, Any] = {
+        "available": True,
+        "count": len(twins),
+        "mean_similarity": round(sum(float(item["similarity"]) for item in twins) / len(twins), 3),
+    }
+    for field in ("views", "reach", "shares", "saves", "follows"):
+        values = [float(row[field]) for row in metrics if isinstance(row.get(field), (int, float))]
+        if values:
+            summary[f"median_{field}"] = round(float(median(values)), 4)
+    return summary
+
+
 def validate_match(online_data: dict[str, Any], local_meta: dict[str, Any], kind: str) -> tuple[bool, str]:
     """Compatibility helper; duration is a clue, never proof of identity."""
+
     if kind == "video":
         online_duration = online_data.get("duration_seconds") or online_data.get("duration")
         local_duration = local_meta.get("duration_seconds") or local_meta.get("duration")
@@ -229,10 +304,7 @@ def validate_match(online_data: dict[str, Any], local_meta: dict[str, Any], kind
             difference = abs(float(online_duration) - float(local_duration))
             if difference <= 1:
                 return True, "Durações compatíveis; confirme visualmente que é o mesmo conteúdo."
-            return (
-                False,
-                f"Durações divergentes em {difference:.1f}s; confirme o arquivo antes de interpretar o resultado.",
-            )
+            return False, f"Durações divergentes em {difference:.1f}s; confirme o arquivo antes de interpretar o resultado."
     return False, "Não há evidência suficiente para confirmar automaticamente a identidade da mídia."
 
 
@@ -254,6 +326,7 @@ def analyze_content(
     include_instagram_history: bool = False,
     manual_comments: list[dict[str, Any]] | None = None,
     distribution_context: dict[str, Any] | None = None,
+    profile_key: str = "",
 ) -> AnalysisEnvelope:
     settings = settings or get_settings()
     report_id = "vi_" + uuid.uuid4().hex[:12]
@@ -290,27 +363,24 @@ def analyze_content(
         inspection = (inspector or MediaInspector(settings=settings)).inspect(paths, job_dir / "media")
         if detected_format == ContentFormat.CAROUSEL and inspection.get("kind") == "image":
             inspection.setdefault("warnings", []).append(
-                "Somente uma captura/capa do carrossel foi inspecionada; envie todos os slides "
-                "para avaliar progressão, entrega da promessa e fechamento."
+                "Somente uma captura/capa do carrossel foi inspecionada; envie todos os slides para avaliar progressão e fechamento."
             )
-        if (
-            detected_format in {ContentFormat.REEL, ContentFormat.SHORT, ContentFormat.VIDEO}
-            and inspection.get("kind") == "image"
-        ):
+        if detected_format in {ContentFormat.REEL, ContentFormat.SHORT, ContentFormat.VIDEO} and inspection.get("kind") == "image":
             inspection.setdefault("warnings", []).append(
-                "Foi enviada uma captura estática de um vídeo. A análise criativa é parcial: "
-                "ritmo, cortes, áudio e retenção temporal não puderam ser medidos."
+                "Foi enviada uma captura estática de um vídeo. Ritmo, áudio, cortes e progressão temporal não puderam ser medidos."
             )
 
     observation_errors: list[str] = []
     observation_model = ""
     media_observation = None
     try:
+        native_video_path = paths[0] if paths and inspection.get("kind") == "video" else None
         media_observation, observation_errors, observation_model = observe_media(
             settings=settings,
             images=inspection.get("frames") or [],
             technical=inspection.get("technical") or {},
             transcription=inspection.get("transcription") or "",
+            video_path=native_video_path,
         )
     except Exception as exc:
         observation_errors = [f"observação multimodal: {type(exc).__name__}: {str(exc)[:240]}"]
@@ -332,15 +402,7 @@ def analyze_content(
 
     if isinstance(manual_data, dict) and media_observation:
         extracted = media_observation.metrics_for_prefill()
-        metric_fields = {
-            "followers",
-            "views",
-            "likes",
-            "comments",
-            "shares",
-            "saves",
-            "reposts",
-        }
+        metric_fields = {"followers", "views", "likes", "comments", "shares", "saves", "reposts"}
         user_supplied = any(manual_data.get(field) is not None for field in metric_fields)
         added: list[str] = []
         for field, value in extracted.items():
@@ -350,11 +412,7 @@ def analyze_content(
         if added:
             manual_data["source"] = "mixed" if user_supplied else "screenshot"
             notes = list(manual_data.get("source_notes") or [])
-            notes.append(
-                "Métricas lidas da captura enviada: "
-                + ", ".join(added)
-                + ". Confirme nos Insights do proprietário."
-            )
+            notes.append("Métricas lidas da captura enviada: " + ", ".join(added) + ". Confirme nos Insights do proprietário.")
             manual_data["source_notes"] = notes
 
     metrics = merge_metric_sources(
@@ -371,11 +429,36 @@ def analyze_content(
         metrics.source_notes.append(f"Coleta pública indisponível: {public['error']}")
     metrics.source_notes.extend(inspection.get("warnings") or [])
 
+    resolved_profile_key = _profile_key(profile_key, official, metrics)
+    store: IntelligenceStore | None = None
+    stored_rows: list[dict[str, Any]] = []
+    persistence_errors: list[str] = []
+    if settings.persistence_active and resolved_profile_key:
+        try:
+            store = IntelligenceStore(settings.intelligence_db)
+            stored_rows = store.comparable_reports(
+                profile_key=resolved_profile_key,
+                platform=metrics.platform.value,
+                content_format=metrics.format.value,
+                limit=250,
+            )
+        except Exception as exc:
+            persistence_errors.append(f"memória longitudinal: {type(exc).__name__}: {str(exc)[:200]}")
+            store = None
+
     official_history = _official_history(official.get("profile_history") or [], metrics.followers)
     history = list(profile_history or [])
     if include_instagram_history and official_history:
         known_ids = {post.post_id for post in history if post.post_id}
         history.extend(post for post in official_history if post.post_id not in known_ids)
+    if stored_rows:
+        known_ids = {post.post_id for post in history if post.post_id}
+        for post in _stored_history(stored_rows, metrics):
+            if post.post_id and post.post_id in known_ids:
+                continue
+            history.append(post)
+            if post.post_id:
+                known_ids.add(post.post_id)
 
     comments = _merge_comments(
         manual_comments,
@@ -389,9 +472,12 @@ def analyze_content(
     quality = assess_data_quality(metrics, benchmark.comparable_posts)
 
     technical_context = dict(inspection.get("technical") or {})
+    technical_context["analysis_engine"] = "viral-intel-5.0"
+    technical_context["profile_key_available"] = bool(resolved_profile_key)
     if media_observation:
         technical_context.update(media_observation.evidence_context())
         technical_context["creative_observation_model"] = observation_model
+        technical_context["native_video_observation"] = "+native-video" in observation_model
     if collected.get("caption"):
         technical_context["public_caption"] = collected["caption"]
     if public.get("comments_sample"):
@@ -411,19 +497,35 @@ def analyze_content(
     technical_context["recommendation_eligibility"] = metrics.recommendation_eligibility
     technical_context["original_content"] = metrics.is_original
     technical_context["data_access_report"] = _data_access_report(official, public, comments, history)
-    technical_context["distribution_diagnosis"] = build_distribution_diagnosis(
-        metrics=metrics,
-        derived=derived,
-        benchmark=benchmark,
-        technical=technical_context,
-        comment_summary=comment_summary,
-        data_access_level=technical_context["data_access_report"]["level"],
+    technical_context["distribution_diagnosis"] = _gate_distribution(
+        build_distribution_diagnosis(
+            metrics=metrics,
+            derived=derived,
+            benchmark=benchmark,
+            technical=technical_context,
+            comment_summary=comment_summary,
+            data_access_level=technical_context["data_access_report"]["level"],
+        )
     )
-    evidence = build_evidence(metrics, derived, benchmark, quality, technical_context)
 
-    strategist = (
-        AIStrategist(settings=settings) if use_ai else AIStrategist(provider="disabled", settings=settings)
+    fingerprint = build_content_fingerprint(
+        metrics,
+        technical_context,
+        inspection.get("transcription") or "",
+        niche,
     )
+    twins = rank_content_twins(
+        fingerprint,
+        stored_rows,
+        limit=settings.content_twin_limit,
+        minimum_score=settings.content_twin_min_score,
+    )
+    technical_context["content_twin_summary"] = _twin_summary(twins)
+    if persistence_errors:
+        technical_context["persistence_warnings"] = persistence_errors
+
+    evidence = build_evidence(metrics, derived, benchmark, quality, technical_context)
+    strategist = AIStrategist(settings=settings) if use_ai else AIStrategist(provider="disabled", settings=settings)
     strategy, provider, model, provider_errors = strategist.analyze(
         metrics=metrics,
         benchmark=benchmark,
@@ -437,7 +539,14 @@ def analyze_content(
     if use_ai and media_observation and observation_model and provider == "deterministic":
         provider = "hybrid"
         model = f"{observation_model} + {model}"
-    provider_errors = observation_errors + provider_errors
+    provider_errors = observation_errors + provider_errors + persistence_errors
+
+    post_key = _post_key(metrics, report_id)
+    longitudinal = (
+        store.longitudinal_summary(profile_key=resolved_profile_key, post_key=post_key)
+        if store and resolved_profile_key
+        else {"available": False, "snapshots": 0}
+    )
 
     envelope = AnalysisEnvelope(
         report_id=report_id,
@@ -447,12 +556,27 @@ def analyze_content(
         data_quality=quality,
         evidence=evidence,
         technical_analysis=technical_context,
+        content_fingerprint=fingerprint,
+        content_twins=twins,
+        longitudinal=longitudinal,
         transcription=inspection.get("transcription") or "",
         strategy=strategy.model_dump(mode="json"),
         provider=provider,
         model=model,
         provider_errors=provider_errors,
     )
+
+    if store and resolved_profile_key:
+        try:
+            store.save_report(envelope, profile_key=resolved_profile_key, post_key=post_key)
+            envelope.longitudinal = store.longitudinal_summary(
+                profile_key=resolved_profile_key,
+                post_key=post_key,
+            )
+            store.save_report(envelope, profile_key=resolved_profile_key, post_key=post_key)
+        except Exception as exc:
+            envelope.provider_errors.append(f"persistência final: {type(exc).__name__}: {str(exc)[:200]}")
+
     save_report(envelope, settings.exports_dir)
     return envelope
 
@@ -464,6 +588,7 @@ def run_pipeline(
     force_mode: str = "auto",
 ) -> dict[str, Any]:
     """Backward-compatible entry point used by older local scripts."""
+
     use_media = force_mode in {"auto", "local", "both"}
     use_url = force_mode in {"auto", "link", "both"}
     report = analyze_content(
