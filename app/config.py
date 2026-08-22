@@ -114,9 +114,7 @@ class Settings:
     )
 
     content_twin_limit: int = field(default_factory=lambda: _int("CONTENT_TWIN_LIMIT", 8, 1))
-    content_twin_min_score: float = field(
-        default_factory=lambda: _float("CONTENT_TWIN_MIN_SCORE", 0.35, 0.0)
-    )
+    content_twin_min_score: float = field(default_factory=lambda: _float("CONTENT_TWIN_MIN_SCORE", 0.35, 0.0))
 
     @property
     def exports_dir(self) -> Path:
