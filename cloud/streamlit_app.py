@@ -1,4 +1,4 @@
-"""Production entrypoint for Streamlit Community Cloud."""
+"""Production entrypoint for Viral Intel 5 on Streamlit Community Cloud."""
 
 from __future__ import annotations
 
@@ -13,8 +13,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
+# Community Cloud storage is ephemeral. Persistent longitudinal intelligence remains
+# available locally and can later be backed by an external database without changing
+# the analysis contract.
 os.environ.setdefault("ENABLE_TRANSCRIPTION", "false")
 os.environ.setdefault("EPHEMERAL_MODE", "true")
+os.environ.setdefault("ENABLE_PERSISTENCE", "false")
 os.environ.setdefault("MAX_UPLOAD_MB", "100")
 os.environ.setdefault("COMMAND_TIMEOUT_SECONDS", "120")
 os.environ.setdefault("AI_PROVIDER", "auto")
@@ -29,7 +33,7 @@ try:
     install_link_content_guardrails()
     install_instagram_fallback_guardrails()
     install_evidence_ingestion_guardrails()
-    runpy.run_path(str(ROOT / "app" / "ui" / "dashboard_v3.py"), run_name="__main__")
+    runpy.run_path(str(ROOT / "app" / "ui" / "dashboard_v5.py"), run_name="__main__")
 except Exception as exc:
     import streamlit as st
 
