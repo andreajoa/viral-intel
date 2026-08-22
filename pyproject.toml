@@ -1,7 +1,7 @@
 [project]
 name = "viral-intel"
-version = "2.1.0"
-description = "Evidence-first social content and profile intelligence"
+version = "5.0.0"
+description = "Evidence-first social content intelligence with longitudinal learning"
 requires-python = ">=3.11,<3.13"
 
 [tool.pytest.ini_options]
