@@ -92,7 +92,9 @@ def verify_report_claims(
             continue
 
         unique = list(dict.fromkeys(missing))
-        limitation = "Verificação independente: faltam " + ", ".join(unique) + " para sustentar esta formulação."
+        limitation = (
+            "Verificação independente: faltam " + ", ".join(unique) + " para sustentar esta formulação."
+        )
         current = str(getattr(claim, "limitation", "") or "").strip()
         claim.limitation = (current + " " + limitation).strip()
         claim.confidence = min(int(getattr(claim, "confidence", 0) or 0), 35)
