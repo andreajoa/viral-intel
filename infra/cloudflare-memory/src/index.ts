@@ -1,4 +1,5 @@
 const encoder = new TextEncoder();
+type Env = CloudflareEnv & { API_SECRET: string };
 
 interface ComparableRow {
   report_id: string;
@@ -43,10 +44,6 @@ function optionalString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function encodeHex(bytes: ArrayBuffer): string {
-  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
 function decodeHex(value: string): Uint8Array | null {
   if (!/^[0-9a-f]{64}$/i.test(value)) return null;
   const output = new Uint8Array(value.length / 2);
@@ -56,7 +53,7 @@ function decodeHex(value: string): Uint8Array | null {
   return output;
 }
 
-async function authorized(request: Request, env: CloudflareEnv, body: string): Promise<boolean> {
+async function authorized(request: Request, env: Env, body: string): Promise<boolean> {
   const timestamp = request.headers.get("X-VI-Timestamp") ?? "";
   const signature = request.headers.get("X-VI-Signature") ?? "";
   const unix = Number(timestamp);
@@ -85,7 +82,7 @@ function parsedJson(value: string): unknown {
   }
 }
 
-async function saveReport(env: CloudflareEnv, body: JsonRecord): Promise<Response> {
+async function saveReport(env: Env, body: JsonRecord): Promise<Response> {
   const reportId = requiredString(body.report_id, "report_id");
   const profileKey = requiredString(body.profile_key, "profile_key");
   const postKey = requiredString(body.post_key, "post_key");
@@ -118,7 +115,7 @@ async function saveReport(env: CloudflareEnv, body: JsonRecord): Promise<Respons
   return json({ ok: true, report_id: reportId });
 }
 
-async function comparableReports(env: CloudflareEnv, url: URL): Promise<Response> {
+async function comparableReports(env: Env, url: URL): Promise<Response> {
   const profileKey = requiredString(url.searchParams.get("profile_key"), "profile_key");
   const platform = requiredString(url.searchParams.get("platform"), "platform");
   const format = requiredString(url.searchParams.get("format"), "format");
@@ -152,7 +149,7 @@ async function comparableReports(env: CloudflareEnv, url: URL): Promise<Response
   return json({ ok: true, reports });
 }
 
-async function postTimeline(env: CloudflareEnv, url: URL): Promise<Response> {
+async function postTimeline(env: Env, url: URL): Promise<Response> {
   const profileKey = requiredString(url.searchParams.get("profile_key"), "profile_key");
   const postKey = requiredString(url.searchParams.get("post_key"), "post_key");
   const result = await env.DB.prepare(
@@ -171,7 +168,7 @@ async function postTimeline(env: CloudflareEnv, url: URL): Promise<Response> {
   return json({ ok: true, timeline });
 }
 
-async function createExperiment(env: CloudflareEnv, body: JsonRecord): Promise<Response> {
+async function createExperiment(env: Env, body: JsonRecord): Promise<Response> {
   const experimentId = requiredString(body.experiment_id, "experiment_id");
   const profileKey = requiredString(body.profile_key, "profile_key");
   const createdAt = requiredString(body.created_at, "created_at");
@@ -198,7 +195,7 @@ async function createExperiment(env: CloudflareEnv, body: JsonRecord): Promise<R
   return json({ ok: true, experiment_id: experimentId }, 201);
 }
 
-async function completeExperiment(env: CloudflareEnv, experimentId: string, body: JsonRecord): Promise<Response> {
+async function completeExperiment(env: Env, experimentId: string, body: JsonRecord): Promise<Response> {
   const result = await env.DB.prepare(
     "UPDATE experiments SET status='COMPLETED', result_json=? WHERE experiment_id=?",
   )
@@ -208,11 +205,17 @@ async function completeExperiment(env: CloudflareEnv, experimentId: string, body
   return json({ ok: true, experiment_id: experimentId });
 }
 
-async function route(request: Request, env: CloudflareEnv): Promise<Response> {
+async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/health") {
-    const row = await env.DB.prepare("SELECT value FROM metadata WHERE key='schema_version'").first<{ value: string }>();
-    return json({ ok: true, service: "viral-intel-memory", schema_version: row?.value ?? "unknown" });
+    const row = await env.DB.prepare("SELECT value FROM metadata WHERE key='schema_version'").first<{
+      value: string;
+    }>();
+    return json({
+      ok: true,
+      service: "viral-intel-memory",
+      schema_version: row?.value ?? "unknown",
+    });
   }
 
   if (!url.pathname.startsWith("/v1/")) return json({ ok: false, error: "Not found" }, 404);
@@ -232,22 +235,33 @@ async function route(request: Request, env: CloudflareEnv): Promise<Response> {
   if (request.method === "GET" && url.pathname === "/v1/reports/comparable") {
     return comparableReports(env, url);
   }
-  if (request.method === "GET" && url.pathname === "/v1/posts/timeline") return postTimeline(env, url);
-  if (request.method === "POST" && url.pathname === "/v1/experiments") return createExperiment(env, body);
+  if (request.method === "GET" && url.pathname === "/v1/posts/timeline") {
+    return postTimeline(env, url);
+  }
+  if (request.method === "POST" && url.pathname === "/v1/experiments") {
+    return createExperiment(env, body);
+  }
 
   const match = url.pathname.match(/^\/v1\/experiments\/([^/]+)\/complete$/);
-  if (request.method === "POST" && match) return completeExperiment(env, match[1], body);
+  if (request.method === "POST" && match?.[1]) {
+    return completeExperiment(env, match[1], body);
+  }
   return json({ ok: false, error: "Not found" }, 404);
 }
 
 export default {
-  async fetch(request: Request, env: CloudflareEnv): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     try {
       return await route(request, env);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Falha interna";
-      console.error(JSON.stringify({ event: "request_error", path: new URL(request.url).pathname, message }));
-      return json({ ok: false, error: message.slice(0, 240) }, message.startsWith("Campo obrigatório") ? 400 : 500);
+      console.error(
+        JSON.stringify({ event: "request_error", path: new URL(request.url).pathname, message }),
+      );
+      return json(
+        { ok: false, error: message.slice(0, 240) },
+        message.startsWith("Campo obrigatório") ? 400 : 500,
+      );
     }
   },
-} satisfies ExportedHandler<CloudflareEnv>;
+} satisfies ExportedHandler<Env>;

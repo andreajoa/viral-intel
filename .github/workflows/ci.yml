@@ -90,3 +90,26 @@ jobs:
           ENABLE_PUBLIC_COLLECTION: "false"
           EPHEMERAL_MODE: "true"
         run: python -m unittest discover -s tests -p 'test_dashboard_v3.py' -v
+
+  cloudflare-worker:
+    name: Cloudflare Worker + D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra/cloudflare-memory
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v6
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+
+      - name: Validar tipos e bundle do Worker
+        run: npm run check
