@@ -77,6 +77,18 @@ class Settings:
     )
     max_ai_output_tokens: int = field(default_factory=lambda: _int("MAX_AI_OUTPUT_TOKENS", 24000, 4000))
 
+    embedding_model: str = field(
+        default_factory=lambda: os.getenv("EMBEDDING_MODEL", "gemini-embedding-2")
+    )
+    embedding_dimensions: int = field(default_factory=lambda: _int("EMBEDDING_DIMENSIONS", 768, 128))
+    enable_semantic_comments: bool = field(
+        default_factory=lambda: _bool("ENABLE_SEMANTIC_COMMENTS", True)
+    )
+    semantic_comment_limit: int = field(default_factory=lambda: _int("SEMANTIC_COMMENT_LIMIT", 40, 3))
+    semantic_cluster_threshold: float = field(
+        default_factory=lambda: _float("SEMANTIC_CLUSTER_THRESHOLD", 0.78, 0.1)
+    )
+
     max_frames: int = field(default_factory=lambda: _int("MAX_FRAMES", 16, 3))
     max_upload_mb: int = field(default_factory=lambda: _int("MAX_UPLOAD_MB", 500, 10))
     hook_seconds: float = field(default_factory=lambda: _float("HOOK_SECONDS", 3.0, 0.5))
@@ -96,6 +108,16 @@ class Settings:
     cookies_file: str = field(default_factory=lambda: os.getenv("COOKIES_FILE", ""))
     command_timeout_seconds: int = field(default_factory=lambda: _int("COMMAND_TIMEOUT_SECONDS", 180, 10))
 
+    cloudflare_memory_url: str = field(
+        default_factory=lambda: os.getenv("CLOUDFLARE_MEMORY_URL", "").strip().rstrip("/")
+    )
+    cloudflare_memory_secret: str = field(
+        default_factory=lambda: os.getenv("CLOUDFLARE_MEMORY_SECRET", "").strip()
+    )
+    cloudflare_memory_timeout_seconds: int = field(
+        default_factory=lambda: _int("CLOUDFLARE_MEMORY_TIMEOUT_SECONDS", 20, 5)
+    )
+
     apify_api_token: str = field(default_factory=lambda: os.getenv("APIFY_API_TOKEN", ""))
     apify_instagram_actor: str = field(
         default_factory=lambda: os.getenv("APIFY_INSTAGRAM_ACTOR", "apify~instagram-scraper")
@@ -112,6 +134,11 @@ class Settings:
     instagram_backoff_seconds: float = field(
         default_factory=lambda: _float("INSTAGRAM_BACKOFF_SECONDS", 1.0, 0.1)
     )
+
+    tiktok_access_token: str = field(default_factory=lambda: os.getenv("TIKTOK_ACCESS_TOKEN", ""))
+    tiktok_history_limit: int = field(default_factory=lambda: _int("TIKTOK_HISTORY_LIMIT", 20, 1))
+    youtube_access_token: str = field(default_factory=lambda: os.getenv("YOUTUBE_ACCESS_TOKEN", ""))
+    youtube_history_limit: int = field(default_factory=lambda: _int("YOUTUBE_HISTORY_LIMIT", 25, 1))
 
     content_twin_limit: int = field(default_factory=lambda: _int("CONTENT_TWIN_LIMIT", 8, 1))
     content_twin_min_score: float = field(default_factory=lambda: _float("CONTENT_TWIN_MIN_SCORE", 0.35, 0.0))
@@ -141,8 +168,18 @@ class Settings:
         return _path("INTELLIGENCE_DB", self.data_dir / "viral_intel.sqlite3")
 
     @property
+    def remote_persistence_configured(self) -> bool:
+        return bool(self.cloudflare_memory_url and self.cloudflare_memory_secret)
+
+    @property
     def persistence_active(self) -> bool:
-        return self.enable_persistence and not self.ephemeral_mode
+        return self.enable_persistence and (self.remote_persistence_configured or not self.ephemeral_mode)
+
+    @property
+    def persistence_backend(self) -> str:
+        if not self.persistence_active:
+            return "disabled"
+        return "cloudflare_d1" if self.remote_persistence_configured else "sqlite"
 
     def ensure_dirs(self) -> None:
         for directory in (

@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from statistics import median
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from app.ai.reliable_media_observer import observe_media
 from app.ai.verified_strategist import VerifiedAIStrategist
@@ -18,10 +19,14 @@ from app.analysis.fingerprint import build_content_fingerprint, rank_content_twi
 from app.analysis.io import merge_metric_sources
 from app.analysis.metrics import assess_data_quality, derive_metrics
 from app.analysis.profile import build_benchmark, lifecycle_bucket, summarize_profile
+from app.analysis.semantic_comments import enrich_comment_intelligence
+from app.analysis.text_content import analyze_text_content
 from app.config import Settings, get_settings
 from app.media.inspector import MediaInspector, media_kind
 from app.models import AnalysisEnvelope, ContentFormat, Platform, PostMetrics
 from app.online.instagram_graph import InstagramGraphCollector
+from app.online.tiktok_authorized import TikTokAuthorizedCollector
+from app.online.youtube_analytics import YouTubeAnalyticsCollector
 from app.online.ytdlp_collector import YTDLPCollector
 from app.reporting.exporter import save_report
 from app.storage import IntelligenceStore
@@ -38,25 +43,34 @@ PLATFORM_ALIASES = {
 }
 
 
-def _platform(value: Platform | str | None, public: dict[str, Any]) -> Platform:
+def _platform(value: Platform | str | None, collected: dict[str, Any]) -> Platform:
     if isinstance(value, Platform):
         return value
-    normalized = re.sub(r"[^a-z]", "", str(value or public.get("platform") or "").lower())
+    normalized = re.sub(r"[^a-z]", "", str(value or collected.get("platform") or "").lower())
     return PLATFORM_ALIASES.get(normalized, Platform.OTHER)
 
 
-def _format_from_collected(public: dict[str, Any]) -> ContentFormat | None:
-    media = public.get("media") or {}
+def _format_from_collected(collected: dict[str, Any], platform: Platform) -> ContentFormat | None:
+    media = collected.get("media") or {}
     product = str(media.get("media_product_type") or "").upper()
     media_type = str(media.get("media_type") or "").upper()
+    url = str(collected.get("webpage_url") or "").lower()
     if product == "REELS":
         return ContentFormat.REEL
+    if product == "TIKTOK":
+        return ContentFormat.VIDEO
+    if product == "YOUTUBE":
+        return ContentFormat.SHORT if "/shorts/" in url else ContentFormat.VIDEO
     if media_type == "CAROUSEL_ALBUM":
         return ContentFormat.CAROUSEL
     if media_type == "IMAGE":
         return ContentFormat.IMAGE
     if media_type == "VIDEO":
-        return ContentFormat.REEL
+        if platform == Platform.INSTAGRAM:
+            return ContentFormat.REEL
+        if platform == Platform.YOUTUBE and "/shorts/" in url:
+            return ContentFormat.SHORT
+        return ContentFormat.VIDEO
     return None
 
 
@@ -76,7 +90,7 @@ def _format(
         except ValueError:
             pass
 
-    collected_format = _format_from_collected(collected or {})
+    collected_format = _format_from_collected(collected or {}, platform)
     if collected_format:
         return collected_format
 
@@ -99,10 +113,7 @@ def _collect_public(url: str, settings: Settings) -> dict[str, Any]:
     if not clean_url:
         return {}
     if not settings.enable_public_collection:
-        return {
-            "source_ok": False,
-            "error": "A coleta pública está desativada neste ambiente.",
-        }
+        return {"source_ok": False, "error": "A coleta pública está desativada neste ambiente."}
     try:
         result = YTDLPCollector(settings=settings).fetch_metadata(clean_url)
         return (
@@ -111,10 +122,7 @@ def _collect_public(url: str, settings: Settings) -> dict[str, Any]:
             else {"source_ok": False, "error": "Resposta pública inválida."}
         )
     except Exception as exc:
-        return {
-            "source_ok": False,
-            "error": f"{type(exc).__name__}: {str(exc)[:220]}",
-        }
+        return {"source_ok": False, "error": f"{type(exc).__name__}: {str(exc)[:220]}"}
 
 
 def _collect_instagram_official(
@@ -148,21 +156,89 @@ def _collect_instagram_official(
     )
 
 
-def _history_format(row: dict[str, Any]) -> ContentFormat:
+def _tiktok_id_from_url(url: str) -> str:
+    match = re.search(r"/video/(\d+)", url)
+    return match.group(1) if match else ""
+
+
+def _youtube_id_from_url(url: str) -> str:
+    parsed = urlparse(url.strip())
+    host = (parsed.hostname or "").lower()
+    if host.endswith("youtu.be"):
+        return parsed.path.strip("/").split("/")[0]
+    if "/shorts/" in parsed.path:
+        return parsed.path.split("/shorts/", 1)[1].split("/", 1)[0]
+    values = parse_qs(parsed.query).get("v") or []
+    return str(values[0]) if values else ""
+
+
+def _collect_authorized_platform(
+    *,
+    platform: Platform,
+    settings: Settings,
+    url: str,
+    tiktok_video_id: str,
+    tiktok_access_token: str,
+    youtube_video_id: str,
+    youtube_access_token: str,
+    include_history: bool,
+) -> dict[str, Any]:
+    if platform == Platform.TIKTOK:
+        token = tiktok_access_token.strip() or settings.tiktok_access_token
+        video_id = tiktok_video_id.strip() or _tiktok_id_from_url(url)
+        if not token:
+            return {}
+        return TikTokAuthorizedCollector(
+            token,
+            timeout=settings.command_timeout_seconds,
+        ).collect(
+            video_id=video_id,
+            include_history=include_history,
+            history_limit=settings.tiktok_history_limit,
+        )
+    if platform == Platform.YOUTUBE:
+        token = youtube_access_token.strip() or settings.youtube_access_token
+        video_id = youtube_video_id.strip() or _youtube_id_from_url(url)
+        if not token:
+            return {}
+        return YouTubeAnalyticsCollector(
+            token,
+            timeout=settings.command_timeout_seconds,
+        ).collect(
+            video_id=video_id,
+            include_history=include_history,
+            history_limit=settings.youtube_history_limit,
+        )
+    return {}
+
+
+def _history_format(row: dict[str, Any], platform: Platform, target: ContentFormat) -> ContentFormat:
     product = str(row.get("media_product_type") or "").upper()
     media_type = str(row.get("media_type") or "").upper()
+    post_url = str(row.get("post_url") or "").lower()
     if product == "REELS":
         return ContentFormat.REEL
+    if platform == Platform.TIKTOK:
+        return target if target in {ContentFormat.VIDEO, ContentFormat.SHORT} else ContentFormat.VIDEO
+    if platform == Platform.YOUTUBE:
+        if target == ContentFormat.SHORT or "/shorts/" in post_url:
+            return ContentFormat.SHORT
+        return ContentFormat.VIDEO
     if media_type == "CAROUSEL_ALBUM":
         return ContentFormat.CAROUSEL
     if media_type == "IMAGE":
         return ContentFormat.IMAGE
     if media_type == "VIDEO":
-        return ContentFormat.REEL
-    return ContentFormat.UNKNOWN
+        return ContentFormat.REEL if platform == Platform.INSTAGRAM else ContentFormat.VIDEO
+    return target if target != ContentFormat.UNKNOWN else ContentFormat.UNKNOWN
 
 
-def _official_history(rows: list[dict[str, Any]], followers: int | None) -> list[PostMetrics]:
+def _official_history(
+    rows: list[dict[str, Any]],
+    followers: int | None,
+    platform: Platform = Platform.INSTAGRAM,
+    target_format: ContentFormat = ContentFormat.UNKNOWN,
+) -> list[PostMetrics]:
     posts: list[PostMetrics] = []
     for row in rows:
         try:
@@ -170,8 +246,8 @@ def _official_history(rows: list[dict[str, Any]], followers: int | None) -> list
                 PostMetrics.model_validate(
                     {
                         **row,
-                        "platform": Platform.INSTAGRAM,
-                        "format": _history_format(row),
+                        "platform": platform,
+                        "format": _history_format(row, platform, target_format),
                         "followers": followers,
                         "captured_at": datetime.now(UTC),
                         "source": "official_api",
@@ -211,6 +287,7 @@ def _data_access_report(
         if public_ok
         else "upload_and_manual_only",
         "official_private_insights": official_ok,
+        "official_collection_source": official.get("collection_source") if official_ok else None,
         "account_metadata": bool(official.get("account")),
         "comment_texts": bool(comments),
         "commenter_usernames": any(row.get("author") for row in comments),
@@ -220,9 +297,9 @@ def _data_access_report(
         "individual_saver_identities": False,
         "ranking_model_weights": False,
         "note": (
-            "A API oficial pode fornecer métricas agregadas e comentários de mídia pertencente à conta "
-            "profissional autenticada. Ela não fornece a lista de pessoas que curtiram, salvaram ou "
-            "compartilharam."
+            "APIs oficiais autorizadas podem fornecer métricas agregadas conforme a plataforma e os escopos "
+            "concedidos. O Viral Intel nunca transforma campos não expostos em estimativas factuais e não "
+            "afirma conhecer pesos privados de ranking."
         ),
     }
 
@@ -232,8 +309,8 @@ def _profile_key(explicit: str, official: dict[str, Any], metrics: PostMetrics) 
         return explicit.strip()
 
     account = official.get("account") or {}
-    account_id = str(account.get("id") or "").strip()
-    username = str(account.get("username") or "").strip().lower()
+    account_id = str(account.get("id") or account.get("open_id") or "").strip()
+    username = str(account.get("username") or account.get("display_name") or "").strip().lower()
     if account_id:
         return f"{metrics.platform.value}:id:{account_id}"
     if username:
@@ -254,31 +331,25 @@ def _stored_history(rows: list[dict[str, Any]], target: PostMetrics) -> list[Pos
 
     chosen: dict[str, tuple[float, PostMetrics]] = {}
     target_age = target.age_hours
-
     for row in rows:
         try:
             post = PostMetrics.model_validate(row.get("metrics") or {})
         except Exception:
             continue
-
         if target.post_id and post.post_id == target.post_id:
             continue
-
         key = post.post_id or str(row.get("post_id") or row.get("report_id") or "")
         if not key:
             continue
-
         if target_age is None or post.age_hours is None:
             distance = 0.0 if key not in chosen else 1.0
         else:
             distance = abs(post.age_hours - target_age)
             if lifecycle_bucket(post.age_hours) == lifecycle_bucket(target_age):
                 distance *= 0.25
-
         current = chosen.get(key)
         if current is None or distance < current[0]:
             chosen[key] = (distance, post)
-
     return [item[1] for item in chosen.values()]
 
 
@@ -293,7 +364,6 @@ def _gate_distribution(diagnosis: dict[str, Any]) -> dict[str, Any]:
     ]
     diagnosis["supported_stage_count"] = len(supported)
     diagnosis["has_distribution_evidence"] = bool(supported)
-
     if supported:
         diagnosis["stages"] = supported
     else:
@@ -311,7 +381,6 @@ def _gate_distribution(diagnosis: dict[str, Any]) -> dict[str, Any]:
 def _twin_summary(twins: list[dict[str, Any]]) -> dict[str, Any]:
     if not twins:
         return {"available": False, "count": 0}
-
     metrics = [item.get("metrics") or {} for item in twins]
     summary: dict[str, Any] = {
         "available": True,
@@ -365,7 +434,13 @@ def analyze_content(
     instagram_access_token: str = "",
     instagram_user_id: str = "",
     include_instagram_history: bool = False,
+    tiktok_video_id: str = "",
+    tiktok_access_token: str = "",
+    youtube_video_id: str = "",
+    youtube_access_token: str = "",
+    include_platform_history: bool = True,
     manual_comments: list[dict[str, Any]] | None = None,
+    manual_caption: str = "",
     distribution_context: dict[str, Any] | None = None,
     profile_key: str = "",
 ) -> AnalysisEnvelope:
@@ -385,6 +460,17 @@ def analyze_content(
             user_id=instagram_user_id,
             include_history=include_instagram_history,
         )
+    elif requested_platform in {Platform.TIKTOK, Platform.YOUTUBE}:
+        official = _collect_authorized_platform(
+            platform=requested_platform,
+            settings=settings,
+            url=url,
+            tiktok_video_id=tiktok_video_id,
+            tiktok_access_token=tiktok_access_token,
+            youtube_video_id=youtube_video_id,
+            youtube_access_token=youtube_access_token,
+            include_history=include_platform_history,
+        )
 
     public = {} if official.get("source_ok") else _collect_public(url, settings)
     collected = official if official.get("source_ok") else public
@@ -402,22 +488,17 @@ def analyze_content(
         "warnings": [],
     }
     if paths:
-        inspection = (inspector or MediaInspector(settings=settings)).inspect(
-            paths,
-            job_dir / "media",
-        )
+        inspection = (inspector or MediaInspector(settings=settings)).inspect(paths, job_dir / "media")
         if detected_format == ContentFormat.CAROUSEL and inspection.get("kind") == "image":
             inspection.setdefault("warnings", []).append(
-                "Somente uma captura/capa do carrossel foi inspecionada; envie todos os slides "
-                "para avaliar progressão e fechamento."
+                "Somente uma captura/capa do carrossel foi inspecionada; envie todos os slides para avaliar progressão e fechamento."
             )
         if (
             detected_format in {ContentFormat.REEL, ContentFormat.SHORT, ContentFormat.VIDEO}
             and inspection.get("kind") == "image"
         ):
             inspection.setdefault("warnings", []).append(
-                "Foi enviada uma captura estática de um vídeo. Ritmo, áudio, cortes e progressão "
-                "temporal não puderam ser medidos."
+                "Foi enviada uma captura estática de um vídeo. Ritmo, áudio, cortes e progressão temporal não puderam ser medidos."
             )
 
     observation_errors: list[str] = []
@@ -433,9 +514,7 @@ def analyze_content(
             video_path=native_video_path,
         )
     except Exception as exc:
-        observation_errors = [
-            f"observação multimodal: {type(exc).__name__}: {str(exc)[:240]}"
-        ]
+        observation_errors = [f"observação multimodal: {type(exc).__name__}: {str(exc)[:240]}"]
 
     if (
         media_observation
@@ -450,22 +529,11 @@ def analyze_content(
     else:
         manual_data = dict(manual_metrics or {})
         if inspection["technical"].get("duration_seconds") is not None:
-            manual_data.setdefault(
-                "duration_seconds",
-                inspection["technical"]["duration_seconds"],
-            )
+            manual_data.setdefault("duration_seconds", inspection["technical"]["duration_seconds"])
 
     if isinstance(manual_data, dict) and media_observation:
         extracted = media_observation.metrics_for_prefill()
-        metric_fields = {
-            "followers",
-            "views",
-            "likes",
-            "comments",
-            "shares",
-            "saves",
-            "reposts",
-        }
+        metric_fields = {"followers", "views", "likes", "comments", "shares", "saves", "reposts"}
         user_supplied = any(manual_data.get(field) is not None for field in metric_fields)
         added: list[str] = []
         for field, value in extracted.items():
@@ -491,9 +559,7 @@ def analyze_content(
     if url and not metrics.post_url:
         metrics.post_url = url
     if official.get("error"):
-        metrics.source_notes.append(
-            f"API oficial do Instagram indisponível: {official['error']}"
-        )
+        metrics.source_notes.append(f"API oficial autorizada indisponível: {official['error']}")
     if public.get("error"):
         metrics.source_notes.append(f"Coleta pública indisponível: {public['error']}")
     metrics.source_notes.extend(inspection.get("warnings") or [])
@@ -513,22 +579,20 @@ def analyze_content(
             )
         except Exception as exc:
             persistence_errors.append(
-                f"memória longitudinal: {type(exc).__name__}: {str(exc)[:200]}"
+                f"memória longitudinal ({settings.persistence_backend}): {type(exc).__name__}: {str(exc)[:200]}"
             )
             store = None
 
     official_history = _official_history(
         official.get("profile_history") or [],
         metrics.followers,
+        detected_platform,
+        detected_format,
     )
     history = list(profile_history or [])
-    if include_instagram_history and official_history:
+    if official_history:
         known_ids = {post.post_id for post in history if post.post_id}
-        history.extend(
-            post
-            for post in official_history
-            if post.post_id not in known_ids
-        )
+        history.extend(post for post in official_history if post.post_id not in known_ids)
 
     if stored_rows:
         known_ids = {post.post_id for post in history if post.post_id}
@@ -544,38 +608,41 @@ def analyze_content(
         official.get("comments_sample") if official.get("source_ok") else None,
         public.get("comments_sample") if public.get("source_ok") else None,
     )
-    comment_summary = analyze_comments(comments)
+    comment_summary = enrich_comment_intelligence(analyze_comments(comments), comments, settings)
 
     benchmark = build_benchmark(metrics, history)
     derived = derive_metrics(metrics)
     quality = assess_data_quality(metrics, benchmark.comparable_posts)
 
     technical_context = dict(inspection.get("technical") or {})
-    technical_context["analysis_engine"] = "viral-intel-5.0"
+    technical_context["analysis_engine"] = "viral-intel-5.1"
     technical_context["profile_key_available"] = bool(resolved_profile_key)
+    technical_context["persistence_backend"] = settings.persistence_backend
 
     if media_observation:
         technical_context.update(media_observation.evidence_context())
         technical_context["creative_observation_model"] = observation_model
         technical_context["native_video_observation"] = "+native-video" in observation_model
 
-    if collected.get("caption"):
-        technical_context["public_caption"] = collected["caption"]
+    caption = manual_caption.strip() or str(collected.get("caption") or "").strip()
+    if caption:
+        caption_source = "manual_input" if manual_caption.strip() else "authorized_or_public_source"
+        technical_context["manual_caption" if manual_caption.strip() else "public_caption"] = caption
+        technical_context["caption_source"] = caption_source
+        technical_context.update(analyze_text_content(caption))
+
     if public.get("comments_sample"):
-        technical_context["public_comments_sample"] = normalize_comments(
-            public["comments_sample"],
-            limit=50,
-        )
+        technical_context["public_comments_sample"] = normalize_comments(public["comments_sample"], limit=50)
     if official.get("source_ok"):
         technical_context["official_account"] = official.get("account") or {}
         technical_context["official_media"] = official.get("media") or {}
         technical_context["official_insights_raw"] = official.get("insights_raw") or {}
         technical_context["official_comments_sample"] = comments[:50]
+        technical_context["official_collection_source"] = official.get("collection_source")
 
     technical_context["comment_intelligence"] = comment_summary
     technical_context["profile_history_summary"] = summarize_profile(history)
     technical_context["media_warnings"] = inspection.get("warnings") or []
-
     if distribution_context:
         technical_context.update(
             {
@@ -587,12 +654,7 @@ def analyze_content(
 
     technical_context["recommendation_eligibility"] = metrics.recommendation_eligibility
     technical_context["original_content"] = metrics.is_original
-    technical_context["data_access_report"] = _data_access_report(
-        official,
-        public,
-        comments,
-        history,
-    )
+    technical_context["data_access_report"] = _data_access_report(official, public, comments, history)
     technical_context["distribution_diagnosis"] = _gate_distribution(
         build_distribution_diagnosis(
             metrics=metrics,
@@ -620,13 +682,7 @@ def analyze_content(
     if persistence_errors:
         technical_context["persistence_warnings"] = persistence_errors
 
-    evidence = build_evidence(
-        metrics,
-        derived,
-        benchmark,
-        quality,
-        technical_context,
-    )
+    evidence = build_evidence(metrics, derived, benchmark, quality, technical_context)
     strategist = (
         AIStrategist(settings=settings)
         if use_ai
@@ -650,10 +706,7 @@ def analyze_content(
 
     post_key = _post_key(metrics, report_id)
     longitudinal = (
-        store.longitudinal_summary(
-            profile_key=resolved_profile_key,
-            post_key=post_key,
-        )
+        store.longitudinal_summary(profile_key=resolved_profile_key, post_key=post_key)
         if store and resolved_profile_key
         else {"available": False, "snapshots": 0}
     )
@@ -678,20 +731,12 @@ def analyze_content(
 
     if store and resolved_profile_key:
         try:
-            store.save_report(
-                envelope,
-                profile_key=resolved_profile_key,
-                post_key=post_key,
-            )
+            store.save_report(envelope, profile_key=resolved_profile_key, post_key=post_key)
             envelope.longitudinal = store.longitudinal_summary(
                 profile_key=resolved_profile_key,
                 post_key=post_key,
             )
-            store.save_report(
-                envelope,
-                profile_key=resolved_profile_key,
-                post_key=post_key,
-            )
+            store.save_report(envelope, profile_key=resolved_profile_key, post_key=post_key)
         except Exception as exc:
             envelope.provider_errors.append(
                 f"persistência final: {type(exc).__name__}: {str(exc)[:200]}"
