@@ -17,6 +17,7 @@ _ENV_KEYS = (
     "ENABLE_TRANSCRIPTION",
     "ENABLE_PUBLIC_COLLECTION",
     "ENABLE_INSTAGRAM_GRAPH",
+    "ENABLE_PERSISTENCE",
     "EPHEMERAL_MODE",
     "GOOGLE_API_KEY",
     "GEMINI_API_KEY",
@@ -27,16 +28,17 @@ _ENV_KEYS = (
 )
 
 
-class DashboardV3Tests(unittest.TestCase):
+class DashboardV5Tests(unittest.TestCase):
     def test_image_upload_generates_report_without_ui_exception(self):
         previous = {key: os.environ.get(key) for key in _ENV_KEYS}
 
         try:
-            with tempfile.TemporaryDirectory(prefix="viral-intel-v3-") as temp_dir:
+            with tempfile.TemporaryDirectory(prefix="viral-intel-v5-") as temp_dir:
                 os.environ["DATA_DIR"] = temp_dir
                 os.environ["ENABLE_TRANSCRIPTION"] = "false"
                 os.environ["ENABLE_PUBLIC_COLLECTION"] = "false"
                 os.environ["ENABLE_INSTAGRAM_GRAPH"] = "false"
+                os.environ["ENABLE_PERSISTENCE"] = "false"
                 os.environ["EPHEMERAL_MODE"] = "true"
                 for key in (
                     "GOOGLE_API_KEY",
@@ -52,14 +54,14 @@ class DashboardV3Tests(unittest.TestCase):
                 image = Image.new("RGB", (1080, 1350), (243, 222, 208))
                 ImageDraw.Draw(image).text(
                     (90, 140),
-                    "TESTE DO VIRAL INTEL",
+                    "TESTE DO VIRAL INTEL 5",
                     fill=(9, 39, 75),
                 )
                 content = io.BytesIO()
                 image.save(content, "PNG")
 
                 app = AppTest.from_file(
-                    str(ROOT / "app" / "ui" / "dashboard_v3.py"),
+                    str(ROOT / "app" / "ui" / "dashboard_v5.py"),
                     default_timeout=60,
                 ).run()
                 self.assertEqual(len(app.exception), 0)
@@ -75,7 +77,8 @@ class DashboardV3Tests(unittest.TestCase):
                 self.assertEqual(len(app.exception), 0)
                 self.assertEqual(len(app.error), 0)
                 metric_labels = {item.label for item in app.metric}
-                self.assertTrue({"Qualidade dos dados", "Dados de distribuição"} & metric_labels)
+                self.assertIn("Qualidade dos dados", metric_labels)
+                self.assertIn("Força do baseline", metric_labels)
                 downloads = [item.label for item in app.get("download_button")]
                 self.assertIn("Baixar relatório completo (.json)", downloads)
                 self.assertIn("Baixar relatório para leitura (.md)", downloads)
