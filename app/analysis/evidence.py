@@ -50,11 +50,7 @@ DERIVED_LABELS = {
         "%",
         "ações de circulação conhecidas ÷ curtidas × 100",
     ),
-    "comments_to_likes_pct": (
-        "Comentários por 100 curtidas",
-        "%",
-        "comentários ÷ curtidas × 100",
-    ),
+    "comments_to_likes_pct": ("Comentários por 100 curtidas", "%", "comentários ÷ curtidas × 100"),
     "circulation_to_comments_ratio": (
         "Circulação em relação aos comentários",
         "× comentários",
@@ -73,70 +69,26 @@ DERIVED_LABELS = {
     ),
     "views_per_follower_pct": ("Visualizações por seguidores", "%", "visualizações ÷ seguidores × 100"),
     "reach_per_follower_pct": ("Alcance por seguidores", "%", "alcance ÷ seguidores × 100"),
-    "impressions_per_reached_account": (
-        "Impressões por conta alcançada",
-        "×",
-        "impressões ÷ alcance",
-    ),
+    "impressions_per_reached_account": ("Impressões por conta alcançada", "×", "impressões ÷ alcance"),
     "like_rate_by_views_pct": ("Taxa de curtidas por views", "%", "curtidas ÷ visualizações × 100"),
     "like_rate_by_reach_pct": ("Taxa de curtidas por alcance", "%", "curtidas ÷ alcance × 100"),
     "comment_rate_by_views_pct": ("Taxa de comentários por views", "%", "comentários ÷ visualizações × 100"),
     "comment_rate_by_reach_pct": ("Taxa de comentários por alcance", "%", "comentários ÷ alcance × 100"),
-    "share_rate_by_views_pct": (
-        "Taxa de compartilhamento por views",
-        "%",
-        "compartilhamentos ÷ visualizações × 100",
-    ),
-    "share_rate_by_reach_pct": (
-        "Taxa de compartilhamento por alcance",
-        "%",
-        "compartilhamentos ÷ alcance × 100",
-    ),
+    "share_rate_by_views_pct": ("Taxa de compartilhamento por views", "%", "compartilhamentos ÷ visualizações × 100"),
+    "share_rate_by_reach_pct": ("Taxa de compartilhamento por alcance", "%", "compartilhamentos ÷ alcance × 100"),
     "save_rate_by_views_pct": ("Taxa de salvamento por views", "%", "salvamentos ÷ visualizações × 100"),
     "save_rate_by_reach_pct": ("Taxa de salvamento por alcance", "%", "salvamentos ÷ alcance × 100"),
     "replay_rate_by_views_pct": ("Taxa de replay", "%", "replays ÷ visualizações × 100"),
     "follow_conversion_by_reach_pct": ("Conversão em seguidores", "%", "novos seguidores ÷ alcance × 100"),
-    "follows_per_1000_reached": (
-        "Seguidores por mil contas alcançadas",
-        "por mil",
-        "novos seguidores ÷ alcance × 1.000",
-    ),
-    "profile_visit_rate_by_reach_pct": (
-        "Visitas ao perfil por alcance",
-        "%",
-        "visitas ao perfil ÷ alcance × 100",
-    ),
-    "profile_visit_conversion_pct": (
-        "Conversão de visita em seguidor",
-        "%",
-        "novos seguidores ÷ visitas ao perfil × 100",
-    ),
-    "non_follower_reach_calculated_pct": (
-        "Alcance de não seguidores calculado",
-        "%",
-        "não seguidores alcançados ÷ alcance total × 100",
-    ),
-    "followers_reach_calculated_pct": (
-        "Alcance de seguidores calculado",
-        "%",
-        "seguidores alcançados ÷ alcance total × 100",
-    ),
+    "follows_per_1000_reached": ("Seguidores por mil contas alcançadas", "por mil", "novos seguidores ÷ alcance × 1.000"),
+    "profile_visit_rate_by_reach_pct": ("Visitas ao perfil por alcance", "%", "visitas ao perfil ÷ alcance × 100"),
+    "profile_visit_conversion_pct": ("Conversão de visita em seguidor", "%", "novos seguidores ÷ visitas ao perfil × 100"),
+    "non_follower_reach_calculated_pct": ("Alcance de não seguidores calculado", "%", "não seguidores alcançados ÷ alcance total × 100"),
+    "followers_reach_calculated_pct": ("Alcance de seguidores calculado", "%", "seguidores alcançados ÷ alcance total × 100"),
     "home_impressions_share_pct": ("Participação do Feed/Home", "%", "impressões no Feed ÷ impressões × 100"),
-    "explore_impressions_share_pct": (
-        "Participação do Explorar",
-        "%",
-        "impressões no Explorar ÷ impressões × 100",
-    ),
-    "profile_impressions_share_pct": (
-        "Participação do perfil",
-        "%",
-        "impressões no perfil ÷ impressões × 100",
-    ),
-    "hashtag_impressions_share_pct": (
-        "Participação de hashtags",
-        "%",
-        "impressões por hashtags ÷ impressões × 100",
-    ),
+    "explore_impressions_share_pct": ("Participação do Explorar", "%", "impressões no Explorar ÷ impressões × 100"),
+    "profile_impressions_share_pct": ("Participação do perfil", "%", "impressões no perfil ÷ impressões × 100"),
+    "hashtag_impressions_share_pct": ("Participação de hashtags", "%", "impressões por hashtags ÷ impressões × 100"),
     "average_views_per_hour_since_publish": (
         "Média de views por hora desde a publicação",
         "views/h",
@@ -229,7 +181,7 @@ def build_evidence(
                 value=benchmark.comparable_posts,
                 unit="posts",
                 source="histórico do próprio perfil",
-                note=f"Estágio: {benchmark.lifecycle_bucket or 'não controlado'}",
+                note=f"Estágio: {benchmark.lifecycle_bucket or 'não controlado'}; força: {benchmark.evidence_strength}",
             )
         )
     if benchmark.ratio_to_median is not None:
@@ -243,7 +195,34 @@ def build_evidence(
                 unit="× mediana",
                 source="histórico comparável do próprio perfil",
                 formula=f"valor do post ÷ mediana de {benchmark.comparable_posts} posts comparáveis",
-                note=f"Percentil {benchmark.percentile}",
+                note=f"Percentil {benchmark.percentile}; método {benchmark.method}",
+            )
+        )
+    if benchmark.expected_low is not None and benchmark.expected_high is not None:
+        benchmark_index += 1
+        items.append(
+            EvidenceItem(
+                id=f"B{benchmark_index}",
+                kind="benchmark",
+                label=f"Intervalo esperado de {benchmark.primary_metric}",
+                value={"mínimo": benchmark.expected_low, "máximo": benchmark.expected_high},
+                source="modelo robusto do histórico comparável",
+                formula="mediana e dispersão robusta em log1p; envelope descritivo de aproximadamente 95%",
+                note="Intervalo específico do perfil, formato e estágio quando há amostra suficiente.",
+            )
+        )
+    if benchmark.robust_z_score is not None:
+        benchmark_index += 1
+        items.append(
+            EvidenceItem(
+                id=f"B{benchmark_index}",
+                kind="benchmark",
+                label="Anomalia robusta vs baseline",
+                value=benchmark.robust_z_score,
+                unit="z robusto",
+                source="modelo robusto do histórico comparável",
+                formula="distância em log1p ÷ escala robusta MAD/IQR",
+                note=f"Força da evidência do baseline: {benchmark.evidence_strength}",
             )
         )
     for name, ratio in benchmark.metric_ratios.items():
@@ -267,23 +246,17 @@ def build_evidence(
         if key.startswith(("public_", "official_", "instagram_")):
             observed_index += 1
             item_id, kind = f"O{observed_index}", "observed"
-            source = (
-                "API oficial do Instagram" if key.startswith(("official_", "instagram_")) else "link público"
-            )
+            source = "API oficial do Instagram" if key.startswith(("official_", "instagram_")) else "link público"
         elif key == "profile_history_summary":
             benchmark_index += 1
-            item_id, kind, source = (
-                f"B{benchmark_index}",
-                "benchmark",
-                "histórico enviado ou autorizado do perfil",
-            )
-        elif key.startswith(("comment_", "distribution_", "algorithm_", "data_access_")):
+            item_id, kind, source = f"B{benchmark_index}", "benchmark", "histórico enviado, autorizado ou persistido do perfil"
+        elif key.startswith(("comment_", "distribution_", "algorithm_", "data_access_", "content_twin_")):
             calculated_index += 1
             item_id, kind = f"C{calculated_index}", "calculated"
             source = "análise determinística do Viral Intel"
         else:
             technical_index += 1
-            item_id, kind, source = f"T{technical_index}", "technical", "inspeção local da mídia"
+            item_id, kind, source = f"T{technical_index}", "technical", "inspeção local/multimodal da mídia"
         items.append(
             EvidenceItem(
                 id=item_id,
