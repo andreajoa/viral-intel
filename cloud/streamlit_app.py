@@ -1,4 +1,9 @@
-"""Production entrypoint for Viral Intel 5 on Streamlit Community Cloud."""
+"""Unified production bootstrap for Viral Intel 5.
+
+Streamlit Community Cloud uses conservative ephemeral defaults. The local launcher sets
+``VIRAL_INTEL_EXECUTION=local`` so `.env` and the normal Settings defaults remain
+authoritative while the exact same bootstrap and guardrails are exercised.
+"""
 
 from __future__ import annotations
 
@@ -13,15 +18,16 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
-# Community Cloud storage is ephemeral. Persistent longitudinal intelligence remains
-# available locally and can later be backed by an external database without changing
-# the analysis contract.
-os.environ.setdefault("ENABLE_TRANSCRIPTION", "false")
-os.environ.setdefault("EPHEMERAL_MODE", "true")
-os.environ.setdefault("ENABLE_PERSISTENCE", "false")
-os.environ.setdefault("MAX_UPLOAD_MB", "100")
-os.environ.setdefault("COMMAND_TIMEOUT_SECONDS", "120")
-os.environ.setdefault("AI_PROVIDER", "auto")
+is_local_execution = os.getenv("VIRAL_INTEL_EXECUTION", "").strip().lower() == "local"
+if not is_local_execution:
+    # Community Cloud storage is ephemeral. Persistent longitudinal intelligence should
+    # use an external durable backend before being enabled in hosted production.
+    os.environ.setdefault("ENABLE_TRANSCRIPTION", "false")
+    os.environ.setdefault("EPHEMERAL_MODE", "true")
+    os.environ.setdefault("ENABLE_PERSISTENCE", "false")
+    os.environ.setdefault("MAX_UPLOAD_MB", "100")
+    os.environ.setdefault("COMMAND_TIMEOUT_SECONDS", "120")
+    os.environ.setdefault("AI_PROVIDER", "auto")
 
 try:
     from app.evidence_ingestion_guardrails import install_evidence_ingestion_guardrails
