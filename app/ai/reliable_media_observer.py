@@ -149,8 +149,10 @@ def observe_media(
         "frames_available": len(images),
         "native_video_available": native_video_ok,
     }
-    request_text = OBSERVATION_PROMPT + "\n\nCONTEXTO TÉCNICO:\n" + json.dumps(
-        context, ensure_ascii=False, default=str
+    request_text = (
+        OBSERVATION_PROMPT
+        + "\n\nCONTEXTO TÉCNICO:\n"
+        + json.dumps(context, ensure_ascii=False, default=str)
     )
 
     def contents_for(text: str) -> list[Any]:
@@ -195,9 +197,7 @@ def observe_media(
                         )
                     return observation, errors, model + "+native-video"
                 except Exception as exc:
-                    errors.append(
-                        f"vídeo nativo {model}: " + _sanitize_error(exc, settings.google_api_key)
-                    )
+                    errors.append(f"vídeo nativo {model}: " + _sanitize_error(exc, settings.google_api_key))
 
         for model in _models(settings):
             try:
