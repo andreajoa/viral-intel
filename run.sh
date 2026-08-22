@@ -25,8 +25,9 @@ fi
 source .venv/bin/activate
 UPLOAD_LIMIT_MB="$(python -c 'from app.config import get_settings; print(get_settings().max_upload_mb)')"
 
-# Local e Cloud usam o mesmo bootstrap de produção. Isso elimina diferenças de
-# comportamento entre ambientes e mantém os mesmos quality gates em toda execução.
+# O mesmo bootstrap é usado localmente e na nuvem, mas o marcador abaixo impede que
+# defaults efêmeros do Community Cloud sobrescrevam a configuração local do .env.
+export VIRAL_INTEL_EXECUTION=local
 exec python -m streamlit run cloud/streamlit_app.py \
   --server.headless=false \
   --server.address=127.0.0.1 \
