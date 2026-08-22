@@ -130,15 +130,23 @@ class TikTokAuthorizedCollector:
             "media_product_type": "TIKTOK",
         }
 
-    def collect(self, *, video_id: str, include_history: bool = False, history_limit: int = 20) -> dict[str, Any]:
+    def collect(
+        self, *, video_id: str, include_history: bool = False, history_limit: int = 20
+    ) -> dict[str, Any]:
         if not self.configured:
             return {"source_ok": False, "error": "Token do TikTok não configurado.", "source_notes": []}
         if not video_id.strip():
-            return {"source_ok": False, "error": "Informe o ID do vídeo TikTok para coleta autorizada.", "source_notes": []}
+            return {
+                "source_ok": False,
+                "error": "Informe o ID do vídeo TikTok para coleta autorizada.",
+                "source_notes": [],
+            }
         try:
             video = self.query_video(video_id.strip())
             account = self.fetch_user()
-            history = [self._history_row(row) for row in self.list_recent(history_limit)] if include_history else []
+            history = (
+                [self._history_row(row) for row in self.list_recent(history_limit)] if include_history else []
+            )
             return {
                 "source_ok": True,
                 "collection_source": "tiktok-display-api-authorized",
@@ -165,5 +173,7 @@ class TikTokAuthorizedCollector:
             return {
                 "source_ok": False,
                 "error": self._safe_error(exc),
-                "source_notes": ["Confirme o token, o escopo video.list e se o vídeo pertence ao usuário autenticado."],
+                "source_notes": [
+                    "Confirme o token, o escopo video.list e se o vídeo pertence ao usuário autenticado."
+                ],
             }

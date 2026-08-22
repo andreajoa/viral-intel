@@ -77,13 +77,9 @@ class Settings:
     )
     max_ai_output_tokens: int = field(default_factory=lambda: _int("MAX_AI_OUTPUT_TOKENS", 24000, 4000))
 
-    embedding_model: str = field(
-        default_factory=lambda: os.getenv("EMBEDDING_MODEL", "gemini-embedding-2")
-    )
+    embedding_model: str = field(default_factory=lambda: os.getenv("EMBEDDING_MODEL", "gemini-embedding-2"))
     embedding_dimensions: int = field(default_factory=lambda: _int("EMBEDDING_DIMENSIONS", 768, 128))
-    enable_semantic_comments: bool = field(
-        default_factory=lambda: _bool("ENABLE_SEMANTIC_COMMENTS", True)
-    )
+    enable_semantic_comments: bool = field(default_factory=lambda: _bool("ENABLE_SEMANTIC_COMMENTS", True))
     semantic_comment_limit: int = field(default_factory=lambda: _int("SEMANTIC_COMMENT_LIMIT", 40, 3))
     semantic_cluster_threshold: float = field(
         default_factory=lambda: _float("SEMANTIC_CLUSTER_THRESHOLD", 0.78, 0.1)

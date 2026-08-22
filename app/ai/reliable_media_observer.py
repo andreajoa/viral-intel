@@ -150,9 +150,7 @@ def observe_media(
         "native_video_available": native_video_ok,
     }
     request_text = (
-        OBSERVATION_PROMPT
-        + "\n\nCONTEXTO TÉCNICO:\n"
-        + json.dumps(context, ensure_ascii=False, default=str)
+        OBSERVATION_PROMPT + "\n\nCONTEXTO TÉCNICO:\n" + json.dumps(context, ensure_ascii=False, default=str)
     )
 
     def contents_for(text: str) -> list[Any]:

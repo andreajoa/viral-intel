@@ -358,9 +358,7 @@ def _gate_distribution(diagnosis: dict[str, Any]) -> dict[str, Any]:
 
     stages = diagnosis.get("stages") or []
     supported = [
-        stage
-        for stage in stages
-        if stage.get("status") in {"COMPROVADO", "PLAUSÍVEL", "SINAL_DE_RISCO"}
+        stage for stage in stages if stage.get("status") in {"COMPROVADO", "PLAUSÍVEL", "SINAL_DE_RISCO"}
     ]
     diagnosis["supported_stage_count"] = len(supported)
     diagnosis["has_distribution_evidence"] = bool(supported)
@@ -645,11 +643,7 @@ def analyze_content(
     technical_context["media_warnings"] = inspection.get("warnings") or []
     if distribution_context:
         technical_context.update(
-            {
-                key: value
-                for key, value in distribution_context.items()
-                if value not in (None, "", [], {})
-            }
+            {key: value for key, value in distribution_context.items() if value not in (None, "", [], {})}
         )
 
     technical_context["recommendation_eligibility"] = metrics.recommendation_eligibility
@@ -684,9 +678,7 @@ def analyze_content(
 
     evidence = build_evidence(metrics, derived, benchmark, quality, technical_context)
     strategist = (
-        AIStrategist(settings=settings)
-        if use_ai
-        else AIStrategist(provider="disabled", settings=settings)
+        AIStrategist(settings=settings) if use_ai else AIStrategist(provider="disabled", settings=settings)
     )
     strategy, provider, model, provider_errors = strategist.analyze(
         metrics=metrics,
@@ -738,9 +730,7 @@ def analyze_content(
             )
             store.save_report(envelope, profile_key=resolved_profile_key, post_key=post_key)
         except Exception as exc:
-            envelope.provider_errors.append(
-                f"persistência final: {type(exc).__name__}: {str(exc)[:200]}"
-            )
+            envelope.provider_errors.append(f"persistência final: {type(exc).__name__}: {str(exc)[:200]}")
 
     save_report(envelope, settings.exports_dir)
     return envelope

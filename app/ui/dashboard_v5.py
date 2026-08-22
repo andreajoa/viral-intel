@@ -141,7 +141,9 @@ def strength_label(value: str) -> str:
 def provider_message(report: AnalysisEnvelope) -> None:
     native = bool(report.technical_analysis.get("native_video_observation"))
     if native:
-        st.success(f"Vídeo original analisado temporalmente por {report.model}, com FFmpeg como cross-check técnico.")
+        st.success(
+            f"Vídeo original analisado temporalmente por {report.model}, com FFmpeg como cross-check técnico."
+        )
     elif report.provider == "hybrid":
         st.success("A IA observou a mídia e o motor de evidências protegeu as conclusões estatísticas.")
     elif report.provider == "gemini":
@@ -205,9 +207,9 @@ def render_distribution(report: AnalysisEnvelope) -> None:
         st.markdown(
             f"""
             <div class="vi-stage">
-              <strong>{stage.get('stage', 'Etapa')}</strong><br>
-              <small>{stage.get('status', 'INCONCLUSIVO')}</small>
-              <p>{stage.get('finding', '')}</p>
+              <strong>{stage.get("stage", "Etapa")}</strong><br>
+              <small>{stage.get("status", "INCONCLUSIVO")}</small>
+              <p>{stage.get("finding", "")}</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -259,7 +261,9 @@ def render_twins(report: AnalysisEnvelope) -> None:
         "Similaridade descreve comparabilidade; não prova causalidade."
     )
     if not report.content_twins:
-        st.info("A memória ainda não tem conteúdos suficientemente semelhantes. Ela melhora conforme novas análises são salvas.")
+        st.info(
+            "A memória ainda não tem conteúdos suficientemente semelhantes. Ela melhora conforme novas análises são salvas."
+        )
         return
     rows = []
     for item in report.content_twins:
@@ -285,7 +289,9 @@ def render_longitudinal(report: AnalysisEnvelope) -> None:
     snapshots = int(longitudinal.get("snapshots") or 0)
     st.metric("Snapshots acumulados", snapshots)
     if snapshots < 2:
-        st.info("Este é o primeiro snapshot persistido deste post. Analise-o novamente mais tarde para medir a trajetória real.")
+        st.info(
+            "Este é o primeiro snapshot persistido deste post. Analise-o novamente mais tarde para medir a trajetória real."
+        )
         return
     deltas = longitudinal.get("deltas") or {}
     if deltas:
@@ -323,7 +329,9 @@ def render_report(report: AnalysisEnvelope) -> None:
     }
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Decisão", labels.get(strategy.repeat_decision, strategy.repeat_decision))
-    c2.metric("Qualidade dos dados", f"{report.data_quality.level} · {report.data_quality.completeness_score}/100")
+    c2.metric(
+        "Qualidade dos dados", f"{report.data_quality.level} · {report.data_quality.completeness_score}/100"
+    )
     c3.metric("Posts comparáveis", report.benchmark.comparable_posts)
     c4.metric("Força do baseline", strength_label(report.benchmark.evidence_strength))
 
@@ -368,8 +376,14 @@ def render_report(report: AnalysisEnvelope) -> None:
             st.markdown("### O que foi observado na peça")
             st.write(creative)
             left, right = st.columns(2)
-            left.info("**Gancho observado**\n\n" + str(report.technical_analysis.get("creative_primary_hook") or "Não identificado"))
-            right.info("**CTA observado**\n\n" + str(report.technical_analysis.get("creative_cta_observed") or "Não identificado"))
+            left.info(
+                "**Gancho observado**\n\n"
+                + str(report.technical_analysis.get("creative_primary_hook") or "Não identificado")
+            )
+            right.info(
+                "**CTA observado**\n\n"
+                + str(report.technical_analysis.get("creative_cta_observed") or "Não identificado")
+            )
             progression = report.technical_analysis.get("creative_sequence_or_progression") or []
             if progression:
                 st.markdown("#### Progressão temporal/visual")
@@ -438,7 +452,9 @@ def render_report(report: AnalysisEnvelope) -> None:
             st.json(report.technical_analysis)
 
     if report.data_quality.missing or report.metrics.source_notes:
-        with st.expander("O que falta para aumentar a precisão", expanded=report.data_quality.level == "BAIXA"):
+        with st.expander(
+            "O que falta para aumentar a precisão", expanded=report.data_quality.level == "BAIXA"
+        ):
             if report.data_quality.missing:
                 st.write("**Dados ausentes:** " + ", ".join(report.data_quality.missing))
             for limitation in report.data_quality.limitations:
@@ -486,10 +502,26 @@ st.markdown(
 
 with st.sidebar:
     st.markdown("## Estado do sistema")
-    st.write(("●" if settings.google_api_key else "○") + " Gemini: " + (settings.gemini_model if settings.google_api_key else "sem chave"))
-    st.write(("●" if shutil.which("ffmpeg") else "○") + " FFmpeg: " + ("disponível" if shutil.which("ffmpeg") else "indisponível"))
-    st.write(("●" if settings.instagram_access_token else "○") + " Instagram API: " + ("configurada" if settings.instagram_access_token else "opcional"))
-    st.write(("●" if settings.persistence_active else "○") + " Memória longitudinal: " + ("ativa" if settings.persistence_active else "efêmera/desativada"))
+    st.write(
+        ("●" if settings.google_api_key else "○")
+        + " Gemini: "
+        + (settings.gemini_model if settings.google_api_key else "sem chave")
+    )
+    st.write(
+        ("●" if shutil.which("ffmpeg") else "○")
+        + " FFmpeg: "
+        + ("disponível" if shutil.which("ffmpeg") else "indisponível")
+    )
+    st.write(
+        ("●" if settings.instagram_access_token else "○")
+        + " Instagram API: "
+        + ("configurada" if settings.instagram_access_token else "opcional")
+    )
+    st.write(
+        ("●" if settings.persistence_active else "○")
+        + " Memória longitudinal: "
+        + ("ativa" if settings.persistence_active else "efêmera/desativada")
+    )
     st.write("● Baseline robusto: ativo")
     st.write("● Content Twins: ativo")
     st.caption("Tokens não são gravados no relatório. Dados ausentes nunca viram zero.")
@@ -500,7 +532,9 @@ with st.sidebar:
 analysis_tab, profile_tab, method_tab = st.tabs(["Analisar conteúdo", "Histórico do perfil", "Como funciona"])
 
 with analysis_tab:
-    st.write("A análise mais profunda combina mídia original, Insights autorizados, comentários e histórico do próprio perfil.")
+    st.write(
+        "A análise mais profunda combina mídia original, Insights autorizados, comentários e histórico do próprio perfil."
+    )
     with st.form("analysis_form"):
         a, b = st.columns(2)
         platform_label = a.selectbox("Plataforma", ["Instagram", "TikTok", "YouTube", "Threads"])
@@ -609,7 +643,9 @@ with analysis_tab:
         try:
             paths = persist_uploads(list(uploads or []))
             history = profile_posts_from_csv(profile_file.getvalue()) if profile_file else []
-            manual_comments = comments_from_file(comments_file.getvalue(), comments_file.name) if comments_file else []
+            manual_comments = (
+                comments_from_file(comments_file.getvalue(), comments_file.name) if comments_file else []
+            )
             now = datetime.now(UTC)
             published_at = now - timedelta(hours=float(age_hours)) if age_hours is not None else None
             eligibility = {
@@ -672,7 +708,9 @@ with analysis_tab:
                 "replays": replays,
                 "skip_rate": skip_rate,
             }
-            with st.spinner("Investigando mídia, baseline, público, distribuição, Content Twins e trajetória..."):
+            with st.spinner(
+                "Investigando mídia, baseline, público, distribuição, Content Twins e trajetória..."
+            ):
                 report = analyze_content(
                     media_paths=paths,
                     platform=platform_map[platform_label],
@@ -703,7 +741,9 @@ with analysis_tab:
 
 with profile_tab:
     st.subheader("Auditoria do histórico")
-    st.write("O baseline respeita plataforma, formato e estágio de vida e passa a usar dispersão robusta do próprio perfil.")
+    st.write(
+        "O baseline respeita plataforma, formato e estágio de vida e passa a usar dispersão robusta do próprio perfil."
+    )
     audit_file = st.file_uploader("Envie o CSV do histórico", type=["csv"], key="v5_profile_audit")
     if audit_file:
         try:
@@ -753,7 +793,9 @@ with method_tab:
         st.write("Separa observado, calculado, benchmark e hipótese. Ausência nunca vira zero.")
     with b:
         st.markdown("#### 2. Baseline")
-        st.write("Modela a faixa esperada do próprio perfil em vez de usar um limiar universal de viralização.")
+        st.write(
+            "Modela a faixa esperada do próprio perfil em vez de usar um limiar universal de viralização."
+        )
     with c:
         st.markdown("#### 3. Content Twins")
         st.write("Compara com conteúdos historicamente parecidos, não apenas com todo o formato.")

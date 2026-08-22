@@ -8,9 +8,7 @@ from typing import Any
 
 import requests
 
-ANALYTICS_METRICS = (
-    "views,likes,comments,shares,averageViewDuration,averageViewPercentage,subscribersGained"
-)
+ANALYTICS_METRICS = "views,likes,comments,shares,averageViewDuration,averageViewPercentage,subscribersGained"
 REACH_METRICS = "videoThumbnailImpressions,videoThumbnailImpressionsClickRate"
 _DURATION_RE = re.compile(
     r"^P(?:(?P<days>\d+)D)?(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>[\d.]+)S)?)?$"
@@ -79,7 +77,9 @@ class YouTubeAnalyticsCollector:
             "id": item.get("id"),
             "username": snippet.get("customUrl") or snippet.get("title"),
             "display_name": snippet.get("title"),
-            "follower_count": int(stats["subscriberCount"]) if str(stats.get("subscriberCount") or "").isdigit() else None,
+            "follower_count": int(stats["subscriberCount"])
+            if str(stats.get("subscriberCount") or "").isdigit()
+            else None,
             "video_count": int(stats["videoCount"]) if str(stats.get("videoCount") or "").isdigit() else None,
         }
 
@@ -101,7 +101,9 @@ class YouTubeAnalyticsCollector:
             return {}
         return dict(zip(headers, rows[0], strict=False))
 
-    def fetch_video_analytics(self, video_id: str, start_date: date, end_date: date) -> tuple[dict[str, Any], list[str]]:
+    def fetch_video_analytics(
+        self, video_id: str, start_date: date, end_date: date
+    ) -> tuple[dict[str, Any], list[str]]:
         base = {
             "ids": "channel==MINE",
             "startDate": start_date.isoformat(),
@@ -169,11 +171,21 @@ class YouTubeAnalyticsCollector:
             )
         return history
 
-    def collect(self, *, video_id: str, include_history: bool = False, history_limit: int = 25) -> dict[str, Any]:
+    def collect(
+        self, *, video_id: str, include_history: bool = False, history_limit: int = 25
+    ) -> dict[str, Any]:
         if not self.configured:
-            return {"source_ok": False, "error": "Token OAuth do YouTube não configurado.", "source_notes": []}
+            return {
+                "source_ok": False,
+                "error": "Token OAuth do YouTube não configurado.",
+                "source_notes": [],
+            }
         if not video_id.strip():
-            return {"source_ok": False, "error": "Informe o ID do vídeo do YouTube para coleta autorizada.", "source_notes": []}
+            return {
+                "source_ok": False,
+                "error": "Informe o ID do vídeo do YouTube para coleta autorizada.",
+                "source_notes": [],
+            }
         try:
             metadata = self.fetch_videos([video_id.strip()]).get(video_id.strip()) or {}
             snippet = metadata.get("snippet") or {}

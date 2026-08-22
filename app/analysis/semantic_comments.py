@@ -44,7 +44,9 @@ def _cluster(vectors: list[list[float]], threshold: float) -> list[list[int]]:
     return clusters
 
 
-def _cluster_summary(cluster: list[int], texts: list[str], vectors: list[list[float]], total: int) -> dict[str, Any]:
+def _cluster_summary(
+    cluster: list[int], texts: list[str], vectors: list[list[float]], total: int
+) -> dict[str, Any]:
     center = _centroid([vectors[index] for index in cluster])
     ranked = sorted(cluster, key=lambda index: _cosine(_normalize(vectors[index]), center), reverse=True)
     representative = texts[ranked[0]] if ranked else ""
@@ -75,7 +77,11 @@ def enrich_comment_intelligence(
     if len(texts) < 3:
         return {
             **summary,
-            "semantic": {"available": False, "reason": "amostra menor que 3 comentários", "sample_size": len(texts)},
+            "semantic": {
+                "available": False,
+                "reason": "amostra menor que 3 comentários",
+                "sample_size": len(texts),
+            },
         }
 
     from google import genai
