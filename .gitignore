@@ -13,6 +13,9 @@ __pycache__/
 *.bak
 *.backup
 *-backup-*.py
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 
 data/inbox/*
 data/tmp/*
