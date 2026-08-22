@@ -1,7 +1,7 @@
 """Typed domain models used across Viral Intel.
 
 The project deliberately distinguishes observed values, deterministic calculations,
-and hypotheses. A missing metric is represented by ``None``; it is never silently
+benchmarks and hypotheses. Missing metrics remain ``None`` and are never silently
 converted to zero.
 """
 
@@ -70,8 +70,9 @@ COUNT_FIELDS = {
 class PostMetrics(BaseModel):
     """A single measurement snapshot for one post.
 
-    Percentages use the human scale (``42.5`` means 42.5%), which matches the
-    values shown by creator dashboards.
+    Percentages use the human scale (``42.5`` means 42.5%), matching creator
+    dashboards. Snapshots are intentionally timestamped so longitudinal analysis can
+    compare equivalent lifecycle stages instead of mixing 6-hour and 7-day results.
     """
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="ignore")
@@ -203,6 +204,12 @@ class BenchmarkResult(BaseModel):
     median_value: float | None = None
     ratio_to_median: float | None = None
     percentile: float | None = None
+    expected_low: float | None = None
+    expected_high: float | None = None
+    robust_z_score: float | None = None
+    baseline_dispersion_pct: float | None = None
+    evidence_strength: Literal["FORTE", "MODERADA", "FRACA", "NÃO_AVALIÁVEL"] = "NÃO_AVALIÁVEL"
+    method: str = "robust_profile_baseline_v5"
     metric_medians: dict[str, float] = Field(default_factory=dict)
     metric_ratios: dict[str, float] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
@@ -211,7 +218,9 @@ class BenchmarkResult(BaseModel):
 class AnalysisEnvelope(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    schema_version: str = "3.0"
+    schema_version: str = "5.0"
+    engine_version: str = "viral-intel-5.0"
+    prompt_version: str = "evidence-contract-v5"
     report_id: str
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metrics: PostMetrics
@@ -220,8 +229,11 @@ class AnalysisEnvelope(BaseModel):
     data_quality: DataQuality
     evidence: list[EvidenceItem]
     technical_analysis: dict[str, Any] = Field(default_factory=dict)
+    content_fingerprint: dict[str, Any] = Field(default_factory=dict)
+    content_twins: list[dict[str, Any]] = Field(default_factory=list)
+    longitudinal: dict[str, Any] = Field(default_factory=dict)
     transcription: str = ""
     strategy: dict[str, Any] = Field(default_factory=dict)
     provider: str = "deterministic"
-    model: str = "evidence-engine-v3"
+    model: str = "evidence-engine-v5"
     provider_errors: list[str] = Field(default_factory=list)
