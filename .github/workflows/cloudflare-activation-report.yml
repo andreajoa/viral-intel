@@ -1,0 +1,44 @@
+name: Cloudflare Activation Observer
+
+on:
+  workflow_run:
+    workflows: ["Cloudflare Production Activation"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish sanitized activation status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_url="https://github.com/${REPOSITORY}/actions/runs/${RUN_ID}"
+          title="Cloudflare activation #${RUN_NUMBER}: ${CONCLUSION}"
+          body=$(cat <<EOF
+          Automated sanitized status for the Viral Intel Cloudflare activation.
+
+          - Status: **${CONCLUSION}**
+          - Activation run: ${run_url}
+          - Run ID: \`${RUN_ID}\`
+          - Commit: \`${HEAD_SHA}\`
+          - Branch: \`${HEAD_BRANCH}\`
+          - Production target: \`https://andre-almeida.online/viral-intel/\`
+          - Durable memory target: \`https://vi-memory.andre-almeida.online/health\`
+
+          No credential values are included in this report. If the activation failed, inspect the linked run for the first failed step; preflight reports only missing secret names, never values.
+          EOF
+          )
+          gh issue create --repo "$REPOSITORY" --title "$title" --body "$body"
