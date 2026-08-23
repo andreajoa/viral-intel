@@ -1,47 +1,38 @@
 name: Viral Intel production runtime smoke
 
 on:
-  push:
-    branches:
-      - runtime-smoke-814ac812
-    paths:
-      - .github/workflows/runtime-smoke.yml
+  pull_request:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   runtime-smoke:
+    name: Live Streamlit Diagnostic
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     steps:
-      - name: Checkout audit branch
-        uses: actions/checkout@v6
-
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
-      - name: Install browser driver client
+      - name: Install Selenium
         run: python -m pip install --disable-pip-version-check selenium
 
-      - name: Inspect rendered production runtime without exposing secrets
-        id: smoke
+      - name: Diagnose rendered production runtime
         env:
           TARGET_URL: https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app/
         run: |
           python - <<'PY'
-          import json
           import os
           import time
-          from pathlib import Path
 
           from selenium import webdriver
+          from selenium.common.exceptions import TimeoutException
           from selenium.webdriver.common.by import By
           from selenium.webdriver.support.ui import WebDriverWait
 
-          target = os.environ["TARGET_URL"]
           options = webdriver.ChromeOptions()
           options.add_argument("--headless=new")
           options.add_argument("--no-sandbox")
@@ -51,12 +42,22 @@ jobs:
 
           driver = webdriver.Chrome(options=options)
           try:
-              driver.get(target)
-              WebDriverWait(driver, 75).until(
-                  lambda d: "Cole o link do post viral" in d.find_element(By.TAG_NAME, "body").text
-              )
-              time.sleep(3)
+              driver.get(os.environ["TARGET_URL"])
+              try:
+                  WebDriverWait(driver, 90).until(
+                      lambda d: "Cole o link do post viral" in d.find_element(By.TAG_NAME, "body").text
+                  )
+              except TimeoutException:
+                  body = driver.find_element(By.TAG_NAME, "body").text
+                  print("LIVE_TITLE=", driver.title)
+                  print("LIVE_URL=", driver.current_url)
+                  print("LIVE_BODY_BEGIN")
+                  print(body[:5000])
+                  print("LIVE_BODY_END")
+                  driver.save_screenshot("runtime-diagnostic.png")
+                  raise
 
+              time.sleep(3)
               body = driver.find_element(By.TAG_NAME, "body").text
               if "Estado do sistema" not in body:
                   for selector in (
@@ -64,10 +65,10 @@ jobs:
                       '[data-testid="collapsedControl"] button',
                       'button[aria-label*="sidebar" i]',
                   ):
-                      buttons = driver.find_elements(By.CSS_SELECTOR, selector)
-                      if buttons:
+                      candidates = driver.find_elements(By.CSS_SELECTOR, selector)
+                      if candidates:
                           try:
-                              buttons[0].click()
+                              candidates[0].click()
                               time.sleep(2)
                               break
                           except Exception:
@@ -75,65 +76,21 @@ jobs:
                   body = driver.find_element(By.TAG_NAME, "body").text
 
               checks = {
-                  "ui_link_only": "Cole o link do post viral" in body and "Descobrir por que viralizou" in body,
-                  "ffmpeg": "FFmpeg: disponível" in body,
-                  "apify": "Coleta pública: Apify + fallbacks" in body,
-                  "memory_d1": "Memória longitudinal: cloudflare_d1" in body,
-                  "ai_multimodal": "IA multimodal:" in body and "IA multimodal: sem chave" not in body,
-                  "auto_download": "Download automático da mídia" in body,
+                  "UI link-only": "Cole o link do post viral" in body and "Descobrir por que viralizou" in body,
+                  "FFmpeg": "FFmpeg: disponível" in body,
+                  "Apify": "Coleta pública: Apify + fallbacks" in body,
+                  "Memória D1": "Memória longitudinal: cloudflare_d1" in body,
+                  "IA multimodal": "IA multimodal:" in body and "IA multimodal: sem chave" not in body,
+                  "Download automático": "Download automático da mídia" in body,
               }
-              Path("runtime-smoke.json").write_text(json.dumps(checks, ensure_ascii=False, indent=2))
-              failed = [name for name, ok in checks.items() if not ok]
-              print("Runtime checks:", json.dumps(checks, ensure_ascii=False))
+              for label, ok in checks.items():
+                  print(f"{label}: {'READY' if ok else 'MISSING'}")
+              failed = [label for label, ok in checks.items() if not ok]
               if failed:
-                  print("FAILED_CHECKS=" + ",".join(failed))
-                  raise SystemExit(1)
+                  print("SANITIZED_BODY_BEGIN")
+                  print(body[:5000])
+                  print("SANITIZED_BODY_END")
+                  raise SystemExit("Runtime incompleto: " + ", ".join(failed))
           finally:
               driver.quit()
           PY
-
-      - name: Publish sanitized success report
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cat > /tmp/runtime-report.md <<'EOF'
-          Production runtime smoke for Viral Intel link-only.
-
-          - UI link-only: **ready**
-          - FFmpeg: **ready**
-          - Apify public collector: **configured**
-          - Cloudflare D1 memory in Streamlit: **configured**
-          - Multimodal AI: **configured**
-          - Automatic media download: **enabled**
-          - Target: `https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app/`
-          - Production commit: `814ac8121f55a9176128431015e36c44136597ab`
-
-          No credential values were read or printed.
-          EOF
-          gh issue create --title "Runtime smoke 814ac812: success" --body-file /tmp/runtime-report.md
-
-      - name: Publish sanitized failure report
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          STATUS="runtime page could not satisfy all readiness checks"
-          if [ -f runtime-smoke.json ]; then
-            STATUS=$(python - <<'PY'
-          import json
-          data=json.load(open('runtime-smoke.json'))
-          print(', '.join(f"{k}={'ready' if v else 'missing'}" for k,v in data.items()))
-          PY
-          )
-          fi
-          cat > /tmp/runtime-report.md <<EOF
-          Production runtime smoke for Viral Intel link-only did not satisfy all readiness checks.
-
-          - Sanitized status: ${STATUS}
-          - Target: \`https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app/\`
-          - Production commit: \`814ac8121f55a9176128431015e36c44136597ab\`
-
-          No credential values were read or printed.
-          EOF
-          gh issue create --title "Runtime smoke 814ac812: failure" --body-file /tmp/runtime-report.md
