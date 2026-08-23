@@ -1,9 +1,3 @@
-from __future__ import annotations
-
-import pathlib
-import tempfile
-import unittest
-
 from app.config import Settings
 from app.models import AnalysisEnvelope, BenchmarkResult, DataQuality, PostMetrics
 from app.pipeline import public_link
@@ -61,7 +55,7 @@ class FakePackageCollector:
             "likes": 18000,
             "comments_count": 800,
             "comments_sample": [{"author": "a", "text": "@b olha isso", "likes": 3}],
-            "downloaded_media_paths": [str(pathlib.Path(destination) / "viral.mp4")],
+            "downloaded_media_paths": [str(destination / "viral.mp4")],
             "creator_history": [
                 {
                     "id": f"old-{index}",
@@ -124,40 +118,22 @@ def fake_analyze_content(**kwargs):
     )
 
 
-class PublicLinkPipelineTests(unittest.TestCase):
-    def test_url_only_enriches_report_with_breakout_dna_and_ai_prompt(self):
-        with tempfile.TemporaryDirectory(prefix="viral-link-") as temp_dir:
-            settings = Settings(
-                data_dir=pathlib.Path(temp_dir),
-                local_media_dir=pathlib.Path(temp_dir) / "inbox",
-            )
-            settings.ensure_dirs()
+def test_url_only_enriches_report_with_breakout_dna_and_ai_prompt(tmp_path, monkeypatch):
+    settings = Settings(data_dir=tmp_path, local_media_dir=tmp_path / "inbox")
+    settings.ensure_dirs()
+    monkeypatch.setattr(public_link, "PublicPostPackageCollector", FakePackageCollector)
+    monkeypatch.setattr(public_link, "analyze_content", fake_analyze_content)
 
-            original_collector = public_link.PublicPostPackageCollector
-            original_analyze = public_link.analyze_content
-            try:
-                public_link.PublicPostPackageCollector = FakePackageCollector
-                public_link.analyze_content = fake_analyze_content
-                report = public_link.analyze_public_link(
-                    "https://www.instagram.com/reel/viral/",
-                    niche="educação inclusiva",
-                    settings=settings,
-                )
-            finally:
-                public_link.PublicPostPackageCollector = original_collector
-                public_link.analyze_content = original_analyze
+    report = public_link.analyze_public_link(
+        "https://www.instagram.com/reel/viral/",
+        niche="educação inclusiva",
+        settings=settings,
+    )
 
-        self.assertTrue(report.technical_analysis["link_only_mode"])
-        self.assertEqual(
-            report.technical_analysis["public_creator_baseline"]["status"],
-            "BREAKOUT_FORTE",
-        )
-        self.assertTrue(report.technical_analysis["viral_dna"]["mechanics"])
-        prompt = report.technical_analysis["replication_blueprint"]["ai_prompt"]
-        self.assertIn("ORIGINAL", prompt)
-        self.assertIn("educação inclusiva", prompt)
-        self.assertEqual(report.technical_analysis["auto_collection"]["coverage_score"], 100)
-
-
-if __name__ == "__main__":
-    unittest.main()
+    assert report.technical_analysis["link_only_mode"] is True
+    assert report.technical_analysis["public_creator_baseline"]["status"] == "BREAKOUT_FORTE"
+    assert report.technical_analysis["viral_dna"]["mechanics"]
+    prompt = report.technical_analysis["replication_blueprint"]["ai_prompt"]
+    assert "ORIGINAL" in prompt
+    assert "educação inclusiva" in prompt
+    assert report.technical_analysis["auto_collection"]["coverage_score"] == 100
