@@ -1,7 +1,6 @@
 [server]
 maxUploadSize = 100
 maxMessageSize = 110
-baseUrlPath = "viral-intel"
 enableCORS = true
 corsAllowedOrigins = [
   "https://andre-almeida.online",
