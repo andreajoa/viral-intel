@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import os
 import runpy
 import sys
@@ -12,6 +13,34 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
+
+_EXPECTED_SETTINGS_FIELDS = {
+    "auto_download_public_media",
+    "cloudflare_memory_url",
+    "apify_api_token",
+}
+
+
+def _purge_stale_app_modules() -> bool:
+    """Reload app modules when Streamlit hot-reload keeps an older Settings class alive."""
+
+    cached_config = sys.modules.get("app.config")
+    if cached_config is None:
+        return False
+
+    settings_type = getattr(cached_config, "Settings", None)
+    dataclass_fields = getattr(settings_type, "__dataclass_fields__", {})
+    if _EXPECTED_SETTINGS_FIELDS.issubset(dataclass_fields):
+        return False
+
+    for module_name in tuple(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name, None)
+    importlib.invalidate_caches()
+    return True
+
+
+_purge_stale_app_modules()
 
 is_local_execution = os.getenv("VIRAL_INTEL_EXECUTION", "").strip().lower() == "local"
 if not is_local_execution:

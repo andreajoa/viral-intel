@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
@@ -23,24 +25,36 @@ _ENV_KEYS = (
 )
 
 
+def _configure_cloud_test_environment(temp_dir: str) -> None:
+    os.environ["DATA_DIR"] = temp_dir
+    os.environ["ENABLE_TRANSCRIPTION"] = "false"
+    os.environ["ENABLE_PUBLIC_COLLECTION"] = "false"
+    os.environ["EPHEMERAL_MODE"] = "true"
+    for key in (
+        "GOOGLE_API_KEY",
+        "GEMINI_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "APIFY_API_TOKEN",
+    ):
+        os.environ.pop(key, None)
+
+
+def _restore_environment(previous: dict[str, str | None]) -> None:
+    for key, value in previous.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
+
+
 class CloudEntrypointTests(unittest.TestCase):
     def test_cloud_entrypoint_opens_link_only_lab_without_exception(self):
         previous = {key: os.environ.get(key) for key in _ENV_KEYS}
 
         try:
             with tempfile.TemporaryDirectory(prefix="viral-intel-cloud-") as temp_dir:
-                os.environ["DATA_DIR"] = temp_dir
-                os.environ["ENABLE_TRANSCRIPTION"] = "false"
-                os.environ["ENABLE_PUBLIC_COLLECTION"] = "false"
-                os.environ["EPHEMERAL_MODE"] = "true"
-                for key in (
-                    "GOOGLE_API_KEY",
-                    "GEMINI_API_KEY",
-                    "OPENAI_API_KEY",
-                    "ANTHROPIC_API_KEY",
-                    "APIFY_API_TOKEN",
-                ):
-                    os.environ.pop(key, None)
+                _configure_cloud_test_environment(temp_dir)
                 get_settings.cache_clear()
 
                 app = AppTest.from_file(
@@ -53,11 +67,42 @@ class CloudEntrypointTests(unittest.TestCase):
                 self.assertTrue(any(button.label == "Descobrir por que viralizou" for button in app.button))
                 self.assertTrue(any(item.label == "Link público" for item in app.text_input))
         finally:
-            for key, value in previous.items():
-                if value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = value
+            _restore_environment(previous)
+            get_settings.cache_clear()
+
+    def test_cloud_entrypoint_recovers_from_stale_settings_module(self):
+        previous = {key: os.environ.get(key) for key in _ENV_KEYS}
+        previous_app_modules = {
+            name: module for name, module in sys.modules.items() if name == "app" or name.startswith("app.")
+        }
+
+        stale_config = types.ModuleType("app.config")
+
+        class StaleSettings:
+            __dataclass_fields__ = {"google_api_key": object()}
+
+        stale_config.Settings = StaleSettings
+
+        try:
+            with tempfile.TemporaryDirectory(prefix="viral-intel-stale-") as temp_dir:
+                _configure_cloud_test_environment(temp_dir)
+                sys.modules["app.config"] = stale_config
+
+                app = AppTest.from_file(
+                    str(ROOT / "cloud" / "streamlit_app.py"),
+                    default_timeout=50,
+                ).run()
+
+                self.assertEqual(len(app.exception), 0)
+                self.assertEqual(len(app.error), 0)
+                self.assertTrue(any(button.label == "Descobrir por que viralizou" for button in app.button))
+                self.assertTrue(any(item.label == "Link público" for item in app.text_input))
+        finally:
+            for name in tuple(sys.modules):
+                if name == "app" or name.startswith("app."):
+                    sys.modules.pop(name, None)
+            sys.modules.update(previous_app_modules)
+            _restore_environment(previous)
             get_settings.cache_clear()
 
 
