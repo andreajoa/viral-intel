@@ -68,44 +68,6 @@ function getStreamlitOrigin(env: RuntimeEnv): URL {
   return url;
 }
 
-async function checkStreamlit(origin: URL): Promise<Response> {
-  try {
-    const healthUrl = new URL("/_stcore/health", origin);
-    const upstream = await fetch(healthUrl.toString(), {
-      method: "GET",
-      redirect: "manual",
-      headers: {
-        Accept: "text/plain,application/json;q=0.9,*/*;q=0.8",
-      },
-    });
-    if (!upstream.ok) {
-      return responseJson(
-        {
-          ok: false,
-          service: "viral-intel-app",
-          origin_status: upstream.status,
-        },
-        502,
-      );
-    }
-    return responseJson({
-      ok: true,
-      service: "viral-intel-app",
-      hosting: "streamlit-community-cloud-embed",
-      origin_host: origin.host,
-    });
-  } catch (error) {
-    return responseJson(
-      {
-        ok: false,
-        service: "viral-intel-app",
-        error: error instanceof Error ? error.message : String(error),
-      },
-      502,
-    );
-  }
-}
-
 function renderEmbeddedApp(request: Request, origin: URL): Response {
   const incoming = new URL(request.url);
   const embedUrl = new URL("/", origin);
@@ -184,8 +146,13 @@ export default {
 
     const origin = getStreamlitOrigin(env);
 
-    if (url.pathname === "/viral-intel/_stcore/health") {
-      return checkStreamlit(origin);
+    if (url.pathname === "/viral-intel/_shell-health") {
+      return responseJson({
+        ok: true,
+        service: "viral-intel-shell",
+        hosting: "streamlit-community-cloud-embed",
+        origin_host: origin.host,
+      });
     }
 
     if (url.pathname !== "/viral-intel/") {
