@@ -50,8 +50,13 @@ st.markdown(
 )
 
 
-@st.cache_resource(show_spinner=False)
-def cached_inspector() -> MediaInspector:
+def create_inspector() -> MediaInspector:
+    """Create an inspector from the current runtime settings.
+
+    Streamlit Secrets can change while the Python process remains alive, so this
+    resource intentionally is not cached across reruns.
+    """
+
     return MediaInspector(settings=settings)
 
 
@@ -372,7 +377,7 @@ if submitted:
                 link,
                 niche=adaptation_context,
                 settings=settings,
-                inspector=cached_inspector(),
+                inspector=create_inspector(),
             )
         st.session_state["latest_public_viral_report"] = report.model_dump(mode="json")
         st.success("Investigação concluída. Abaixo está o DNA público e o blueprint de recriação.")
