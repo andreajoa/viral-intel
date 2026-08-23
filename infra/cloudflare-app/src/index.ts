@@ -109,9 +109,9 @@ async function checkStreamlit(origin: URL): Promise<Response> {
 function renderEmbeddedApp(request: Request, origin: URL): Response {
   const incoming = new URL(request.url);
   const embedUrl = new URL("/", origin);
-  for (const [key, value] of incoming.searchParams.entries()) {
+  incoming.searchParams.forEach((value, key) => {
     embedUrl.searchParams.append(key, value);
-  }
+  });
   embedUrl.searchParams.set("embed", "true");
 
   const html = `<!doctype html>
