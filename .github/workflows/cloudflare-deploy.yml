@@ -168,25 +168,24 @@ jobs:
         working-directory: infra/cloudflare-app
         run: npx wrangler deploy --config wrangler.staging.jsonc --secrets-file .app-secrets.json
 
-      - name: Smoke test HTTP do staging
+      - name: Validar shell autenticado do staging
         shell: bash
         run: |
           set -euo pipefail
           EDGE="https://viral-intel-staging.andre-almeida.online/viral-intel/_edge-health"
-          APP="https://viral-intel-staging.andre-almeida.online/viral-intel/_stcore/health"
+          SHELL="https://viral-intel-staging.andre-almeida.online/viral-intel/_shell-health"
           PAGE="https://viral-intel-staging.andre-almeida.online/viral-intel/"
           ok=0
           for attempt in $(seq 1 60); do
-            if curl --fail --silent --show-error --max-time 20 "$EDGE" | grep -q '"ok":true'; then
-              if curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$APP" >/dev/null; then
-                ok=1
-                break
-              fi
+            if curl --fail --silent --show-error --max-time 20 "$EDGE" | grep -q '"ok":true' \
+              && curl --fail --silent --show-error --max-time 20 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$SHELL" | grep -q '"ok":true'; then
+              ok=1
+              break
             fi
             sleep 5
           done
           if [ "$ok" -ne 1 ]; then
-            echo "::error::Staging Free nao ficou saudavel; producao NAO sera promovida."
+            echo "::error::Shell do staging nao ficou saudavel; producao NAO sera promovida."
             exit 1
           fi
           unauth=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 20 "$PAGE")
@@ -199,25 +198,24 @@ jobs:
           grep -q 'viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app' /tmp/viral-intel-staging.html
           grep -q 'embed=true' /tmp/viral-intel-staging.html
 
-      - name: Testar origin e WebSocket nativos do Streamlit
+      - name: Validar origin publico do Streamlit
         shell: bash
         run: |
           set -euo pipefail
-          ORIGIN="viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app"
-          curl --fail --silent --show-error --max-time 30 "https://${ORIGIN}/_stcore/health" >/dev/null
-          curl --fail --silent --show-error --max-time 30 "https://${ORIGIN}/?embed=true" >/tmp/viral-intel-origin.html
-          test -s /tmp/viral-intel-origin.html
-          python -m pip install --quiet websocket-client
-          python - <<'PY'
-          import websocket
-          origin = 'viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app'
-          ws = websocket.create_connection(
-              f'wss://{origin}/_stcore/stream',
-              timeout=30,
-              origin=f'https://{origin}',
-          )
-          ws.close()
-          PY
+          ORIGIN="https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app/?embed=true"
+          ok=0
+          for attempt in $(seq 1 30); do
+            code=$(curl --location --silent --show-error --output /tmp/viral-intel-origin.html --write-out '%{http_code}' --max-time 30 "$ORIGIN" || true)
+            if [ "$code" -ge 200 ] && [ "$code" -lt 400 ] && [ -s /tmp/viral-intel-origin.html ]; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Origin publico do Streamlit nao respondeu com HTML saudavel."
+            exit 1
+          fi
 
       - name: Confirmar homepage identica antes da promocao
         shell: bash
@@ -243,15 +241,14 @@ jobs:
         run: |
           set -euo pipefail
           EDGE="https://andre-almeida.online/viral-intel/_edge-health"
-          APP="https://andre-almeida.online/viral-intel/_stcore/health"
+          SHELL="https://andre-almeida.online/viral-intel/_shell-health"
           PAGE="https://andre-almeida.online/viral-intel/"
           ok=0
           for attempt in $(seq 1 60); do
-            if curl --fail --silent --show-error --max-time 20 "$EDGE" | grep -q '"ok":true'; then
-              if curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$APP" >/dev/null; then
-                ok=1
-                break
-              fi
+            if curl --fail --silent --show-error --max-time 20 "$EDGE" | grep -q '"ok":true' \
+              && curl --fail --silent --show-error --max-time 20 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$SHELL" | grep -q '"ok":true'; then
+              ok=1
+              break
             fi
             sleep 5
           done
@@ -280,5 +277,5 @@ jobs:
           echo "Cloudflare Workers Free ativo em https://andre-almeida.online/viral-intel/"
           echo "D1 Free ativo em https://vi-memory.andre-almeida.online/health"
           echo "Origin Streamlit: https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app/"
-          echo "Modo: Streamlit Community Cloud embed oficial, protegido pela entrada Basic Auth do Worker no dominio personalizado."
+          echo "Modo: shell autenticado no Worker Free + embed oficial do Streamlit Community Cloud."
           echo "IMPORTANTE: configure CLOUDFLARE_MEMORY_URL e CLOUDFLARE_MEMORY_SECRET nos Secrets do Streamlit para ativar memoria duravel no app Python."
