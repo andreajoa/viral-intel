@@ -38,7 +38,7 @@ jobs:
             -f body="Automated sanitized start marker for the Viral Intel Cloudflare Free activation.\n\n- Status: **started**\n- Activation run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\n- Run ID: \`${GITHUB_RUN_ID}\`\n- Commit: \`${GITHUB_SHA}\`\n- Branch: \`${GITHUB_REF_NAME}\`\n- Production target: \`https://andre-almeida.online/viral-intel/\`\n- Durable memory target: \`https://vi-memory.andre-almeida.online/health\`\n\nNo credential values are included in this report."
 
       - name: Baixar codigo validado
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
