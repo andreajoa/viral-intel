@@ -14,7 +14,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   verify:
@@ -81,20 +80,14 @@ jobs:
                   "Memória longitudinal:" in line and "desativada" not in line for line in status_lines
               )
               lines = [
-                  "Sanitized live runtime check.",
-                  "",
-                  f"- Apify active: **{'yes' if apify_active else 'no'}**",
-                  f"- Durable memory active: **{'yes' if memory_active else 'no'}**",
-                  "- Observed status lines:",
+                  "SANITIZED_RUNTIME_STATUS",
+                  f"APIFY_ACTIVE={'yes' if apify_active else 'no'}",
+                  f"DURABLE_MEMORY_ACTIVE={'yes' if memory_active else 'no'}",
               ]
-              lines.extend(f"  - {line}" for line in status_lines)
-              lines.append("")
-              lines.append("No token or secret values were collected or printed.")
-              Path("/tmp/runtime-result.md").write_text("\n".join(lines), encoding="utf-8")
+              lines.extend(status_lines)
+              Path("/tmp/runtime-result.txt").write_text("\n".join(lines), encoding="utf-8")
           finally:
               driver.quit()
           PY
-      - name: Publish sanitized result
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh issue create --title "Apify runtime check after secret update" --body-file /tmp/runtime-result.md
+      - name: Print sanitized result
+        run: cat /tmp/runtime-result.txt
