@@ -74,9 +74,7 @@ def public_history_to_posts(
         candidate = {
             "platform": platform,
             "format": _format_from_public(row),
-            "post_id": str(
-                _first_present(row.get("post_id"), row.get("id"), row.get("shortCode")) or ""
-            )
+            "post_id": str(_first_present(row.get("post_id"), row.get("id"), row.get("shortCode")) or "")
             or None,
             "post_url": _first_present(row.get("post_url"), row.get("url"), row.get("inputUrl")),
             "title": _first_present(row.get("caption"), row.get("title")),
@@ -107,9 +105,7 @@ def public_history_to_posts(
                 row.get("shareCount"),
                 row.get("reshareCount"),
             ),
-            "reposts": _first_present(
-                row.get("reposts"), row.get("repostsCount"), row.get("repostCount")
-            ),
+            "reposts": _first_present(row.get("reposts"), row.get("repostsCount"), row.get("repostCount")),
             "duration_seconds": _first_present(row.get("duration_seconds"), row.get("videoDuration")),
             "source": "public",
             "source_notes": [
@@ -133,9 +129,7 @@ def _public_engagement(post: PostMetrics) -> float | None:
     if not post.views:
         return None
     total = sum(
-        float(value)
-        for value in (post.likes, post.comments, post.shares, post.reposts)
-        if value is not None
+        float(value) for value in (post.likes, post.comments, post.shares, post.reposts) if value is not None
     )
     return total / float(post.views) * 100
 
@@ -171,11 +165,7 @@ def build_public_creator_baseline(
     comparable = same_format if len(same_format) >= 5 else candidates
     metric = "views" if target.views is not None else "likes" if target.likes is not None else "comments"
     target_value = getattr(target, metric, None)
-    values = [
-        float(value)
-        for post in comparable
-        if (value := getattr(post, metric, None)) is not None
-    ]
+    values = [float(value) for post in comparable if (value := getattr(post, metric, None)) is not None]
     result: dict[str, Any] = {
         "available": bool(target_value is not None and values),
         "source": "public_creator_history",
@@ -212,9 +202,7 @@ def build_public_creator_baseline(
     if target.views is not None and target.followers:
         confidence = min(98, confidence + 5)
 
-    engagement_values = [
-        value for post in comparable if (value := _public_engagement(post)) is not None
-    ]
+    engagement_values = [value for post in comparable if (value := _public_engagement(post)) is not None]
     median_engagement = float(median(engagement_values)) if engagement_values else None
     engagement_lift = None
     if result["public_engagement_rate_pct"] is not None and median_engagement:
@@ -231,9 +219,7 @@ def build_public_creator_baseline(
             "median_public_engagement_rate_pct": round(median_engagement, 3)
             if median_engagement is not None
             else None,
-            "engagement_lift_multiple": round(engagement_lift, 3)
-            if engagement_lift is not None
-            else None,
+            "engagement_lift_multiple": round(engagement_lift, 3) if engagement_lift is not None else None,
         }
     )
     return result
@@ -391,9 +377,7 @@ def build_replication_blueprint(
     evidence_summary = "; ".join(creator_baseline.get("limitations") or [])
     preserve_lines = "\n- ".join(preserve or ["estrutura do gancho e progressão observadas"])
     hook_lines = "\n- ".join(plan.hook_options)
-    structure_lines = "\n".join(
-        f"{index}. {item}" for index, item in enumerate(plan.structure, 1)
-    )
+    structure_lines = "\n".join(f"{index}. {item}" for index, item in enumerate(plan.structure, 1))
     change_lines = "\n- ".join(plan.change or ["tema, exemplos, texto e elementos visuais"])
     originality_lines = "\n- ".join(avoid_copying)
     limitation = evidence_summary or (

@@ -62,10 +62,7 @@ def _media_candidates(raw: dict[str, Any]) -> list[str]:
     def add_best(item: dict[str, Any]) -> None:
         video = item.get("videoUrl") or item.get("video_url") or item.get("video")
         image = (
-            item.get("displayUrl")
-            or item.get("display_url")
-            or item.get("imageUrl")
-            or item.get("image_url")
+            item.get("displayUrl") or item.get("display_url") or item.get("imageUrl") or item.get("image_url")
         )
         chosen = video or image
         if isinstance(chosen, str) and chosen.startswith(("http://", "https://")):

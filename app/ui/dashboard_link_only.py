@@ -101,7 +101,9 @@ def _render_collection(report: AnalysisEnvelope) -> None:
         "likes": "likes",
     }
     if signals:
-        st.write(" · ".join(("✓" if value else "○") + " " + labels.get(key, key) for key, value in signals.items()))
+        st.write(
+            " · ".join(("✓" if value else "○") + " " + labels.get(key, key) for key, value in signals.items())
+        )
     source = report.technical_analysis.get("public_collection_source")
     if source:
         st.caption(f"Fonte principal desta coleta: {source}")
@@ -117,7 +119,9 @@ def _render_breakout(report: AnalysisEnvelope) -> None:
     b_multiple = f"{multiple:.2f}×" if isinstance(multiple, (int, float)) else "Indisponível"
     c.metric("Vs. mediana do criador", b_multiple)
     percentile = baseline.get("percentile")
-    d.metric("Percentil público", f"{percentile:.1f}" if isinstance(percentile, (int, float)) else "Indisponível")
+    d.metric(
+        "Percentil público", f"{percentile:.1f}" if isinstance(percentile, (int, float)) else "Indisponível"
+    )
 
     if baseline.get("available"):
         st.markdown(
@@ -264,7 +268,9 @@ def _render_evidence(report: AnalysisEnvelope) -> None:
         st.dataframe(rows, width="stretch", hide_index=True)
         unavailable = report.technical_analysis.get("third_party_private_metrics_unavailable") or []
         if unavailable:
-            st.write("**Métricas privadas de terceiros que permanecem indisponíveis:** " + ", ".join(unavailable))
+            st.write(
+                "**Métricas privadas de terceiros que permanecem indisponíveis:** " + ", ".join(unavailable)
+            )
         for limitation in report.data_quality.limitations:
             st.write(f"• {limitation}")
         if report.provider_errors:
@@ -313,8 +319,16 @@ st.markdown(
 
 with st.sidebar:
     st.markdown("## Estado do sistema")
-    st.write(("●" if settings.google_api_key else "○") + " IA multimodal: " + (settings.gemini_model if settings.google_api_key else "sem chave"))
-    st.write(("●" if shutil.which("ffmpeg") else "○") + " FFmpeg: " + ("disponível" if shutil.which("ffmpeg") else "indisponível"))
+    st.write(
+        ("●" if settings.google_api_key else "○")
+        + " IA multimodal: "
+        + (settings.gemini_model if settings.google_api_key else "sem chave")
+    )
+    st.write(
+        ("●" if shutil.which("ffmpeg") else "○")
+        + " FFmpeg: "
+        + ("disponível" if shutil.which("ffmpeg") else "indisponível")
+    )
     st.write(
         ("●" if settings.apify_api_token else "◐")
         + " Coleta pública: "
@@ -328,7 +342,9 @@ with st.sidebar:
     )
     st.divider()
     st.markdown("### Regra central")
-    st.write("O sistema copia mecanismos testáveis, não conteúdo autoral. Métrica privada ausente nunca vira estimativa factual.")
+    st.write(
+        "O sistema copia mecanismos testáveis, não conteúdo autoral. Métrica privada ausente nunca vira estimativa factual."
+    )
 
 st.markdown("## Cole o link do post viral")
 with st.form("public_viral_link_form"):

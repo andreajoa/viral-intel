@@ -20,8 +20,7 @@ if not is_local_execution:
     os.environ.setdefault("ENABLE_TRANSCRIPTION", "false")
     os.environ.setdefault("EPHEMERAL_MODE", "true")
     remote_memory = bool(
-        os.getenv("CLOUDFLARE_MEMORY_URL", "").strip()
-        and os.getenv("CLOUDFLARE_MEMORY_SECRET", "").strip()
+        os.getenv("CLOUDFLARE_MEMORY_URL", "").strip() and os.getenv("CLOUDFLARE_MEMORY_SECRET", "").strip()
     )
     os.environ.setdefault("ENABLE_PERSISTENCE", "true" if remote_memory else "false")
     os.environ.setdefault("MAX_UPLOAD_MB", "100")

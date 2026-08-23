@@ -85,12 +85,7 @@ def _manual_public_metrics(package: dict[str, Any]) -> dict[str, Any]:
 def _profile_key(package: dict[str, Any], platform: Platform) -> str:
     account = package.get("account") if isinstance(package.get("account"), dict) else {}
     account_id = str(account.get("id") or "").strip()
-    username = (
-        str(account.get("username") or package.get("uploader") or "")
-        .strip()
-        .lstrip("@")
-        .lower()
-    )
+    username = str(account.get("username") or package.get("uploader") or "").strip().lstrip("@").lower()
     if account_id:
         return f"public:{platform.value}:id:{account_id}"
     if username:
@@ -145,10 +140,7 @@ def _persist_enriched_report(
         )
         store.save_report(report, profile_key=profile_key, post_key=post_key)
     except Exception as exc:
-        report.provider_errors.append(
-            "persistência do DNA viral: "
-            f"{type(exc).__name__}: {str(exc)[:200]}"
-        )
+        report.provider_errors.append(f"persistência do DNA viral: {type(exc).__name__}: {str(exc)[:200]}")
 
 
 def analyze_public_link(
@@ -176,10 +168,7 @@ def analyze_public_link(
         package = PublicPostPackageCollector(settings=settings).collect(clean_url, collection_dir)
         if not package.get("source_ok") and not package.get("downloaded_media_paths"):
             detail = str(package.get("error") or "nenhuma fonte pública retornou dados")
-            raise RuntimeError(
-                "Não foi possível extrair este post automaticamente. "
-                f"Detalhe: {detail[:320]}"
-            )
+            raise RuntimeError(f"Não foi possível extrair este post automaticamente. Detalhe: {detail[:320]}")
 
         platform = _platform_from_package(package, clean_url)
         content_format = _format_from_package(package, clean_url)

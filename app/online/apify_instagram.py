@@ -122,7 +122,10 @@ class ApifyInstagramCollector:
     @staticmethod
     def _profile_url(username: str) -> str:
         clean = username.strip().lstrip("@").split("?", 1)[0].strip("/")
-        if not clean or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._" for character in clean):
+        if not clean or any(
+            character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._"
+            for character in clean
+        ):
             raise ValueError("Username público inválido para coleta do histórico.")
         return f"https://www.instagram.com/{clean}/"
 
@@ -228,7 +231,7 @@ class ApifyInstagramCollector:
                 "count": len(posts),
                 "source_notes": [
                     "Baseline montado com publicações públicas recentes do mesmo criador.",
-                    "O número atual de seguidores não representa necessariamente o tamanho da conta na data de cada post."
+                    "O número atual de seguidores não representa necessariamente o tamanho da conta na data de cada post.",
                 ],
             }
         except Exception as exc:

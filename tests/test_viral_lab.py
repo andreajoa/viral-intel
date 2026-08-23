@@ -80,9 +80,7 @@ class ViralLabTests(unittest.TestCase):
                 "sample_size": 20,
                 "mention_rate_pct": 30.0,
                 "question_rate_pct": 15.0,
-                "intent_distribution": [
-                    {"intent": "marcação ou envio", "share_of_sample_pct": 30.0}
-                ],
+                "intent_distribution": [{"intent": "marcação ou envio", "share_of_sample_pct": 30.0}],
             },
         )
 

@@ -50,9 +50,7 @@ class CloudEntrypointTests(unittest.TestCase):
 
                 self.assertEqual(len(app.exception), 0)
                 self.assertEqual(len(app.error), 0)
-                self.assertTrue(
-                    any(button.label == "Descobrir por que viralizou" for button in app.button)
-                )
+                self.assertTrue(any(button.label == "Descobrir por que viralizou" for button in app.button))
                 self.assertTrue(any(item.label == "Link público" for item in app.text_input))
         finally:
             for key, value in previous.items():

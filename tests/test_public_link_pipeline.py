@@ -111,9 +111,7 @@ def fake_analyze_content(**kwargs):
                 "sample_size": 1,
                 "mention_rate_pct": 100.0,
                 "question_rate_pct": 0.0,
-                "intent_distribution": [
-                    {"intent": "marcação ou envio", "share_of_sample_pct": 100.0}
-                ],
+                "intent_distribution": [{"intent": "marcação ou envio", "share_of_sample_pct": 100.0}],
             },
             "creative_content_summary": "Vídeo curto com payoff.",
             "creative_primary_hook": "Pare de fazer isso",
