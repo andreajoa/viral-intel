@@ -19,11 +19,12 @@ _ENV_KEYS = (
     "GEMINI_API_KEY",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
+    "APIFY_API_TOKEN",
 )
 
 
 class CloudEntrypointTests(unittest.TestCase):
-    def test_cloud_entrypoint_opens_without_exception(self):
+    def test_cloud_entrypoint_opens_link_only_lab_without_exception(self):
         previous = {key: os.environ.get(key) for key in _ENV_KEYS}
 
         try:
@@ -37,6 +38,7 @@ class CloudEntrypointTests(unittest.TestCase):
                     "GEMINI_API_KEY",
                     "OPENAI_API_KEY",
                     "ANTHROPIC_API_KEY",
+                    "APIFY_API_TOKEN",
                 ):
                     os.environ.pop(key, None)
                 get_settings.cache_clear()
@@ -48,7 +50,8 @@ class CloudEntrypointTests(unittest.TestCase):
 
                 self.assertEqual(len(app.exception), 0)
                 self.assertEqual(len(app.error), 0)
-                self.assertTrue(any(tab.label == "Analisar conteúdo" for tab in app.tabs))
+                self.assertTrue(any(button.label == "Descobrir por que viralizou" for button in app.button))
+                self.assertTrue(any(item.label == "Link público" for item in app.text_input))
         finally:
             for key, value in previous.items():
                 if value is None:

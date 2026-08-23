@@ -76,6 +76,49 @@ class ApifyInstagramCollectorTests(unittest.TestCase):
         self.assertEqual(session.calls[0][1]["json"]["resultsType"], "posts")
         self.assertEqual(session.calls[1][1]["json"]["resultsType"], "comments")
 
+    def test_collects_recent_creator_posts_for_public_baseline(self):
+        session = FakeSession(
+            [
+                FakeResponse(
+                    [
+                        {
+                            "id": "old-1",
+                            "shortCode": "OLD1",
+                            "url": "https://www.instagram.com/reel/OLD1/",
+                            "videoPlayCount": 12000,
+                            "likesCount": 700,
+                            "commentsCount": 30,
+                            "timestamp": "2026-08-01T18:30:00.000Z",
+                            "productType": "clips",
+                            "videoUrl": "https://cdn.example/old1.mp4",
+                        },
+                        {
+                            "id": "old-2",
+                            "shortCode": "OLD2",
+                            "url": "https://www.instagram.com/reel/OLD2/",
+                            "videoPlayCount": 18000,
+                            "likesCount": 900,
+                            "commentsCount": 40,
+                            "timestamp": "2026-08-02T18:30:00.000Z",
+                            "productType": "clips",
+                        },
+                    ]
+                )
+            ]
+        )
+        collector = ApifyInstagramCollector(api_token="token", session=session)
+
+        result = collector.collect_creator_history("@perfil_publico", limit=30)
+
+        self.assertTrue(result["source_ok"])
+        self.assertEqual(result["count"], 2)
+        self.assertEqual(result["posts"][0]["views"], 12000)
+        self.assertEqual(result["posts"][0]["post_id"], "old-1")
+        payload = session.calls[0][1]["json"]
+        self.assertEqual(payload["resultsType"], "posts")
+        self.assertEqual(payload["resultsLimit"], 30)
+        self.assertEqual(payload["directUrls"], ["https://www.instagram.com/perfil_publico/"])
+
     def test_missing_token_is_explicit(self):
         result = ApifyInstagramCollector(api_token="").collect("https://www.instagram.com/p/ABC123/")
         self.assertFalse(result["source_ok"])
