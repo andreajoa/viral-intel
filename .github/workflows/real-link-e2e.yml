@@ -100,7 +100,10 @@ jobs:
                           time.sleep(2)
                           continue
                       body = driver.find_element(By.TAG_NAME, "body").text
-                  if "Investigação concluída" in body:
+                  if (
+                      "Investigação concluída" in body
+                      and "Prompt pronto para enviar a uma IA" in body
+                  ):
                       break
                   if "Não foi possível investigar o link automaticamente" in body:
                       print("LIVE_E2E_ERROR_PRESENT=yes")
