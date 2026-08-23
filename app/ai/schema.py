@@ -7,6 +7,21 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
+def _normalize_refs(value: object, limit: int = 8) -> object:
+    """Deduplicate and cap evidence references before Pydantic length validation."""
+
+    if not isinstance(value, list):
+        return value
+    normalized: list[str] = []
+    for item in value:
+        ref = str(item or "").strip()
+        if ref and ref not in normalized:
+            normalized.append(ref)
+        if len(normalized) >= limit:
+            break
+    return normalized
+
+
 class GroundedInsight(BaseModel):
     title: str = Field(min_length=3, max_length=120)
     finding: str = Field(min_length=3)
@@ -14,11 +29,21 @@ class GroundedInsight(BaseModel):
     confidence: int = Field(ge=0, le=100)
     limitation: str = ""
 
+    @field_validator("evidence_refs", mode="before")
+    @classmethod
+    def normalize_evidence_refs(cls, value: object) -> object:
+        return _normalize_refs(value)
+
 
 class CausalHypothesis(GroundedInsight):
     judgment: Literal["SUSTENTADA", "PLAUSÍVEL", "FRACA", "NÃO_AVALIÁVEL"]
     counterevidence_refs: list[str] = Field(default_factory=list, max_length=8)
     needed_to_confirm: list[str] = Field(default_factory=list, max_length=5)
+
+    @field_validator("counterevidence_refs", mode="before")
+    @classmethod
+    def normalize_counterevidence_refs(cls, value: object) -> object:
+        return _normalize_refs(value)
 
 
 class Experiment(BaseModel):
@@ -29,6 +54,11 @@ class Experiment(BaseModel):
     comparison_rule: str
     minimum_sample: str
     based_on_refs: list[str] = Field(default_factory=list, max_length=8)
+
+    @field_validator("based_on_refs", mode="before")
+    @classmethod
+    def normalize_based_on_refs(cls, value: object) -> object:
+        return _normalize_refs(value)
 
 
 class NextContentPlan(BaseModel):
@@ -41,6 +71,11 @@ class NextContentPlan(BaseModel):
     preserve: list[str] = Field(default_factory=list, max_length=6)
     change: list[str] = Field(default_factory=list, max_length=6)
     based_on_refs: list[str] = Field(default_factory=list, max_length=10)
+
+    @field_validator("based_on_refs", mode="before")
+    @classmethod
+    def normalize_based_on_refs(cls, value: object) -> object:
+        return _normalize_refs(value, limit=10)
 
 
 class StrategicReport(BaseModel):
