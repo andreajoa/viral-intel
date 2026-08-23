@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import pathlib
 import tempfile
 import unittest
-from pathlib import Path
-from unittest.mock import patch
+import unittest.mock
 
 from app.config import Settings
 from app.models import AnalysisEnvelope, BenchmarkResult, DataQuality, PostMetrics
@@ -62,7 +62,7 @@ class FakePackageCollector:
             "likes": 18000,
             "comments_count": 800,
             "comments_sample": [{"author": "a", "text": "@b olha isso", "likes": 3}],
-            "downloaded_media_paths": [str(Path(destination) / "viral.mp4")],
+            "downloaded_media_paths": [str(pathlib.Path(destination) / "viral.mp4")],
             "creator_history": [
                 {
                     "id": f"old-{index}",
@@ -128,12 +128,18 @@ def fake_analyze_content(**kwargs):
 class PublicLinkPipelineTests(unittest.TestCase):
     def test_url_only_enriches_report_with_breakout_dna_and_ai_prompt(self):
         with tempfile.TemporaryDirectory(prefix="viral-link-") as temp_dir:
-            settings = Settings(data_dir=Path(temp_dir), local_media_dir=Path(temp_dir) / "inbox")
+            settings = Settings(
+                data_dir=pathlib.Path(temp_dir),
+                local_media_dir=pathlib.Path(temp_dir) / "inbox",
+            )
             settings.ensure_dirs()
-            with patch(
+            with unittest.mock.patch(
                 "app.pipeline.public_link.PublicPostPackageCollector",
                 FakePackageCollector,
-            ), patch("app.pipeline.public_link.analyze_content", side_effect=fake_analyze_content) as analyze:
+            ), unittest.mock.patch(
+                "app.pipeline.public_link.analyze_content",
+                side_effect=fake_analyze_content,
+            ) as analyze:
                 report = analyze_public_link(
                     "https://www.instagram.com/reel/viral/",
                     niche="educação inclusiva",
