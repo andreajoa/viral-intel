@@ -6,6 +6,11 @@ on:
       - ops-production-screenshot-e8cad8d9
     paths:
       - .github/workflows/production-screenshot-once.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/production-screenshot-once.yml
 
 permissions:
   contents: read
