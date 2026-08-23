@@ -1,0 +1,20 @@
+{
+  "name": "viral-intel-cloudflare-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cf-typegen": "wrangler types --config wrangler.production.jsonc --env-interface CloudflareEnv",
+    "check": "npm run cf-typegen && tsc --noEmit && wrangler deploy --dry-run --config wrangler.production.jsonc --outdir=.wrangler-dist",
+    "check:staging": "wrangler deploy --dry-run --config wrangler.staging.jsonc --outdir=.wrangler-dist-staging",
+    "deploy:staging": "wrangler deploy --config wrangler.staging.jsonc",
+    "deploy:production": "wrangler deploy --config wrangler.production.jsonc"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "0.3.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "wrangler": "^4.40.0"
+  }
+}

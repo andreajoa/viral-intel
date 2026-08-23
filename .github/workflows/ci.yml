@@ -113,3 +113,55 @@ jobs:
 
       - name: Validar tipos e bundle do Worker
         run: npm run check
+
+  cloudflare-app:
+    name: Cloudflare Container App
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: infra/cloudflare-app
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v6
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Instalar dependencias do gateway
+        run: npm install --no-audit --no-fund
+
+      - name: Validar tipos e bundle do gateway
+        run: npm run check && npm run check:staging
+
+      - name: Construir imagem real do Viral Intel
+        run: docker build -f ../../Dockerfile.cloudflare -t viral-intel-cloudflare:test ../..
+
+      - name: Subir container e validar base path do Streamlit
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name viral-intel-test -p 8080:8080 \
+            -e CLOUDFLARE_MEMORY_URL=https://memory.invalid \
+            -e CLOUDFLARE_MEMORY_SECRET=ci-memory-secret-with-24-chars \
+            viral-intel-cloudflare:test
+
+          ok=0
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:8080/viral-intel/_stcore/health >/dev/null; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            docker logs viral-intel-test
+            exit 1
+          fi
+
+          docker inspect --format='{{json .State.Health}}' viral-intel-test || true
+          docker logs --tail 80 viral-intel-test

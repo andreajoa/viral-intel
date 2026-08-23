@@ -1,0 +1,51 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "viral-intel-app-staging",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "viral-intel-staging.andre-almeida.online",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "VIRAL_INTEL_BASIC_USER": "andre",
+    "CLOUDFLARE_MEMORY_URL": "https://vi-memory.andre-almeida.online"
+  },
+  "containers": [
+    {
+      "class_name": "ViralIntelContainer",
+      "image": "../../Dockerfile.cloudflare",
+      "max_instances": 1,
+      "instance_type": "basic"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "VIRAL_INTEL",
+        "class_name": "ViralIntelContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ViralIntelContainer"]
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    }
+  }
+}

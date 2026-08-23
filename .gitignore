@@ -5,6 +5,10 @@
 .venv/
 .test-venv/
 venv/
+node_modules/
+.wrangler/
+.wrangler-dist*/
+worker-configuration.d.ts
 __pycache__/
 *.py[cod]
 .pytest_cache/
