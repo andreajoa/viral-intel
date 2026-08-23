@@ -68,49 +68,78 @@ function getStreamlitOrigin(env: RuntimeEnv): URL {
   return url;
 }
 
-async function proxyToStreamlit(request: Request, env: RuntimeEnv): Promise<Response> {
-  const incoming = new URL(request.url);
-  const origin = getStreamlitOrigin(env);
-  const target = new URL(incoming.pathname + incoming.search, origin);
-
-  const headers = new Headers(request.headers);
-  headers.delete("Authorization");
-  headers.delete("Host");
-  headers.set("X-Forwarded-Host", incoming.host);
-  headers.set("X-Forwarded-Proto", "https");
-
-  const init: RequestInit = {
-    method: request.method,
-    headers,
-    redirect: "manual",
-  };
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    init.body = request.body;
-  }
-
-  const upstream = await fetch(new Request(target.toString(), init));
-  const responseHeaders = new Headers(upstream.headers);
-  responseHeaders.set("X-Viral-Intel-Proxy", "cloudflare-free");
-
-  const location = responseHeaders.get("Location");
-  if (location) {
-    try {
-      const redirect = new URL(location, origin);
-      if (redirect.origin === origin.origin) {
-        redirect.protocol = incoming.protocol;
-        redirect.host = incoming.host;
-        responseHeaders.set("Location", redirect.toString());
-      }
-    } catch {
-      // Keep non-URL Location values unchanged.
+async function checkStreamlit(origin: URL): Promise<Response> {
+  try {
+    const healthUrl = new URL("/_stcore/health", origin);
+    const upstream = await fetch(healthUrl.toString(), {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        Accept: "text/plain,application/json;q=0.9,*/*;q=0.8",
+      },
+    });
+    if (!upstream.ok) {
+      return responseJson(
+        {
+          ok: false,
+          service: "viral-intel-app",
+          origin_status: upstream.status,
+        },
+        502,
+      );
     }
+    return responseJson({
+      ok: true,
+      service: "viral-intel-app",
+      hosting: "streamlit-community-cloud-embed",
+      origin_host: origin.host,
+    });
+  } catch (error) {
+    return responseJson(
+      {
+        ok: false,
+        service: "viral-intel-app",
+        error: error instanceof Error ? error.message : String(error),
+      },
+      502,
+    );
   }
+}
 
-  return new Response(upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: responseHeaders,
-    webSocket: upstream.webSocket,
+function renderEmbeddedApp(request: Request, origin: URL): Response {
+  const incoming = new URL(request.url);
+  const embedUrl = new URL("/", origin);
+  incoming.searchParams.forEach((value, key) => {
+    embedUrl.searchParams.append(key, value);
+  });
+  embedUrl.searchParams.set("embed", "true");
+
+  const html = `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Viral Intel</title>
+  <style>
+    html,body{width:100%;height:100%;margin:0;background:#fff;overflow:hidden}
+    iframe{display:block;width:100%;height:100%;border:0;background:#fff}
+  </style>
+</head>
+<body>
+  <iframe src="${embedUrl.toString()}" title="Viral Intel" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+</body>
+</html>`;
+
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+      "Content-Security-Policy": `default-src 'none'; frame-src ${origin.origin}; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'`,
+    },
   });
 }
 
@@ -124,7 +153,7 @@ export default {
         return responseJson({
           ok: true,
           service: "viral-intel-edge",
-          hosting: "streamlit-community-cloud",
+          hosting: "streamlit-community-cloud-embed",
           cloudflare_plan: "free-compatible",
           origin_host: origin.host,
         });
@@ -153,16 +182,16 @@ export default {
       return authRequired();
     }
 
-    try {
-      return await proxyToStreamlit(request, env);
-    } catch (error) {
-      console.error(
-        JSON.stringify({
-          event: "streamlit_proxy_error",
-          message: error instanceof Error ? error.message : String(error),
-        }),
-      );
-      return responseJson({ ok: false, error: "Upstream unavailable" }, 502);
+    const origin = getStreamlitOrigin(env);
+
+    if (url.pathname === "/viral-intel/_stcore/health") {
+      return checkStreamlit(origin);
     }
+
+    if (url.pathname !== "/viral-intel/") {
+      return responseJson({ ok: false, error: "Not found" }, 404);
+    }
+
+    return renderEmbeddedApp(request, origin);
   },
 } satisfies ExportedHandler<RuntimeEnv>;

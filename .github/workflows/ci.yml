@@ -91,8 +91,11 @@ jobs:
           EPHEMERAL_MODE: "true"
         run: python -m unittest discover -s tests -p 'test_dashboard_v3.py' -v
 
-      - name: Confirmar base path do reverse proxy
-        run: grep -F 'baseUrlPath = "viral-intel"' .streamlit/config.toml
+      - name: Confirmar modo raiz para embed do Community Cloud
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -q '^baseUrlPath' .streamlit/config.toml
 
   cloudflare-worker:
     name: Cloudflare Worker + D1 Free
@@ -118,7 +121,7 @@ jobs:
         run: npm run check
 
   cloudflare-app:
-    name: Cloudflare Free Streamlit Proxy
+    name: Cloudflare Free Streamlit Embed
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -134,7 +137,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Instalar dependencias do proxy
+      - name: Instalar dependencias do Worker
         run: npm install --no-audit --no-fund
 
       - name: Validar tipos e bundles de staging/producao
@@ -148,3 +151,4 @@ jobs:
           ! grep -R '"durable_objects"' wrangler.production.jsonc wrangler.staging.jsonc
           grep -F '"STREAMLIT_ORIGIN": "https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app"' wrangler.production.jsonc
           grep -F '"STREAMLIT_ORIGIN": "https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app"' wrangler.staging.jsonc
+          grep -F 'streamlit-community-cloud-embed' src/index.ts

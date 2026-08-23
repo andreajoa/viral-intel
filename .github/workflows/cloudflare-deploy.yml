@@ -22,7 +22,7 @@ env:
 
 jobs:
   deploy:
-    name: D1 Free -> proxy staging -> /viral-intel
+    name: D1 Free -> embed staging -> /viral-intel
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -149,11 +149,11 @@ jobs:
             exit 1
           fi
 
-      - name: Instalar Wrangler do proxy Free
+      - name: Instalar Wrangler do Worker Free
         working-directory: infra/cloudflare-app
         run: npm install --no-audit --no-fund
 
-      - name: Preparar senha do proxy sem imprimir valor
+      - name: Preparar senha do Worker sem imprimir valor
         working-directory: infra/cloudflare-app
         shell: bash
         run: |
@@ -177,10 +177,11 @@ jobs:
           PAGE="https://viral-intel-staging.andre-almeida.online/viral-intel/"
           ok=0
           for attempt in $(seq 1 60); do
-            if curl --fail --silent --show-error --max-time 20 "$EDGE" | grep -q '"ok":true' \
-              && curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$APP" >/dev/null; then
-              ok=1
-              break
+            if curl --fail --silent --show-error --max-time 20 "$EDGE" | grep -q '"ok":true'; then
+              if curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$APP" >/dev/null; then
+                ok=1
+                break
+              fi
             fi
             sleep 5
           done
@@ -195,22 +196,25 @@ jobs:
           fi
           curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$PAGE" >/tmp/viral-intel-staging.html
           test -s /tmp/viral-intel-staging.html
+          grep -q 'viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app' /tmp/viral-intel-staging.html
+          grep -q 'embed=true' /tmp/viral-intel-staging.html
 
-      - name: Testar WebSocket do Streamlit via Worker Free
+      - name: Testar origin e WebSocket nativos do Streamlit
         shell: bash
         run: |
           set -euo pipefail
+          ORIGIN="viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app"
+          curl --fail --silent --show-error --max-time 30 "https://${ORIGIN}/_stcore/health" >/dev/null
+          curl --fail --silent --show-error --max-time 30 "https://${ORIGIN}/?embed=true" >/tmp/viral-intel-origin.html
+          test -s /tmp/viral-intel-origin.html
           python -m pip install --quiet websocket-client
           python - <<'PY'
-          import base64, os
           import websocket
-          password = os.environ['VIRAL_INTEL_APP_PASSWORD']
-          token = base64.b64encode(f'andre:{password}'.encode()).decode()
+          origin = 'viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app'
           ws = websocket.create_connection(
-              'wss://viral-intel-staging.andre-almeida.online/viral-intel/_stcore/stream',
-              header=[f'Authorization: Basic {token}'],
+              f'wss://{origin}/_stcore/stream',
               timeout=30,
-              origin='https://viral-intel-staging.andre-almeida.online',
+              origin=f'https://{origin}',
           )
           ws.close()
           PY
@@ -243,10 +247,11 @@ jobs:
           PAGE="https://andre-almeida.online/viral-intel/"
           ok=0
           for attempt in $(seq 1 60); do
-            if curl --fail --silent --show-error --max-time 20 "$EDGE" | grep -q '"ok":true' \
-              && curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$APP" >/dev/null; then
-              ok=1
-              break
+            if curl --fail --silent --show-error --max-time 20 "$EDGE" | grep -q '"ok":true'; then
+              if curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$APP" >/dev/null; then
+                ok=1
+                break
+              fi
             fi
             sleep 5
           done
@@ -259,6 +264,9 @@ jobs:
             echo "::error::Producao nao esta protegida: HTTP $unauth"
             exit 1
           fi
+          curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$PAGE" >/tmp/viral-intel-production.html
+          grep -q 'viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app' /tmp/viral-intel-production.html
+          grep -q 'embed=true' /tmp/viral-intel-production.html
           curl --fail --silent --show-error --location --max-time 30 https://andre-almeida.online/ >/tmp/site-after.html
           after_sha=$(sha256sum /tmp/site-after.html | awk '{print $1}')
           after_bytes=$(wc -c </tmp/site-after.html | tr -d ' ')
@@ -271,5 +279,6 @@ jobs:
         run: |
           echo "Cloudflare Workers Free ativo em https://andre-almeida.online/viral-intel/"
           echo "D1 Free ativo em https://vi-memory.andre-almeida.online/health"
-          echo "Origin Streamlit: https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app/viral-intel/"
+          echo "Origin Streamlit: https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app/"
+          echo "Modo: Streamlit Community Cloud embed oficial, protegido pela entrada Basic Auth do Worker no dominio personalizado."
           echo "IMPORTANTE: configure CLOUDFLARE_MEMORY_URL e CLOUDFLARE_MEMORY_SECRET nos Secrets do Streamlit para ativar memoria duravel no app Python."
