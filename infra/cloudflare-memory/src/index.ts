@@ -53,6 +53,12 @@ function decodeHex(value: string): Uint8Array | null {
   return output;
 }
 
+function toArrayBuffer(value: Uint8Array): ArrayBuffer {
+  const output = new ArrayBuffer(value.byteLength);
+  new Uint8Array(output).set(value);
+  return output;
+}
+
 async function authorized(request: Request, env: Env, body: string): Promise<boolean> {
   const timestamp = request.headers.get("X-VI-Timestamp") ?? "";
   const signature = request.headers.get("X-VI-Signature") ?? "";
@@ -71,7 +77,12 @@ async function authorized(request: Request, env: Env, body: string): Promise<boo
     false,
     ["verify"],
   );
-  return crypto.subtle.verify("HMAC", key, signatureBytes, encoder.encode(canonical));
+  return crypto.subtle.verify(
+    "HMAC",
+    key,
+    toArrayBuffer(signatureBytes),
+    encoder.encode(canonical),
+  );
 }
 
 function parsedJson(value: string): unknown {
