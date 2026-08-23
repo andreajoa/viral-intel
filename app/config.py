@@ -99,6 +99,13 @@ class Settings:
     )
     enable_public_collection: bool = field(default_factory=lambda: _bool("ENABLE_PUBLIC_COLLECTION", True))
     enable_instagram_embed: bool = field(default_factory=lambda: _bool("ENABLE_INSTAGRAM_EMBED", True))
+    auto_download_public_media: bool = field(
+        default_factory=lambda: _bool("AUTO_DOWNLOAD_PUBLIC_MEDIA", True)
+    )
+    max_public_media_mb: int = field(default_factory=lambda: _int("MAX_PUBLIC_MEDIA_MB", 200, 10))
+    public_creator_history_limit: int = field(
+        default_factory=lambda: _int("PUBLIC_CREATOR_HISTORY_LIMIT", 30, 5)
+    )
     ephemeral_mode: bool = field(default_factory=lambda: _bool("EPHEMERAL_MODE", False))
     enable_persistence: bool = field(default_factory=lambda: _bool("ENABLE_PERSISTENCE", True))
     cookies_file: str = field(default_factory=lambda: os.getenv("COOKIES_FILE", ""))
