@@ -5,14 +5,9 @@ import unittest
 from app.ai.media_observer import MediaObservation, VisibleMetric
 from app.analysis import distribution
 from app.models import BenchmarkResult, ContentFormat, Platform, PostMetrics
-from app.runtime_guardrails import install_production_guardrails
 
 
-class RuntimeGuardrailTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        install_production_guardrails()
-
+class CoreGuardrailTests(unittest.TestCase):
     def test_unverified_zero_is_not_used(self):
         observation = MediaObservation(
             observed=True,
