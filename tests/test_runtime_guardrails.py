@@ -5,6 +5,7 @@ import unittest
 from app.ai.media_observer import MediaObservation, VisibleMetric
 from app.analysis import distribution
 from app.models import BenchmarkResult, ContentFormat, Platform, PostMetrics
+from app.pipeline.main import _gate_distribution
 
 
 class CoreGuardrailTests(unittest.TestCase):
@@ -58,6 +59,7 @@ class CoreGuardrailTests(unittest.TestCase):
             derived={},
             benchmark=BenchmarkResult(),
         )
+        diagnosis = _gate_distribution(diagnosis)
         self.assertFalse(diagnosis["has_distribution_evidence"])
         self.assertEqual(diagnosis["stages"], [])
         self.assertEqual(diagnosis["likely_distribution_path"], [])
