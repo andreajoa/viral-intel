@@ -152,3 +152,78 @@ jobs:
           grep -F '"STREAMLIT_ORIGIN": "https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app"' wrangler.production.jsonc
           grep -F '"STREAMLIT_ORIGIN": "https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app"' wrangler.staging.jsonc
           grep -F 'streamlit-community-cloud-embed' src/index.ts
+
+  production-runtime:
+    name: Production Runtime Readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Configurar Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Instalar Selenium
+        run: python -m pip install --disable-pip-version-check selenium
+
+      - name: Verificar UI e recursos ativos no Streamlit real
+        env:
+          TARGET_URL: https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app/
+        run: |
+          python - <<'PY'
+          import os
+          import time
+
+          from selenium import webdriver
+          from selenium.webdriver.common.by import By
+          from selenium.webdriver.support.ui import WebDriverWait
+
+          options = webdriver.ChromeOptions()
+          options.add_argument("--headless=new")
+          options.add_argument("--no-sandbox")
+          options.add_argument("--disable-dev-shm-usage")
+          options.add_argument("--disable-gpu")
+          options.add_argument("--window-size=1440,1400")
+
+          driver = webdriver.Chrome(options=options)
+          try:
+              driver.get(os.environ["TARGET_URL"])
+              WebDriverWait(driver, 120).until(
+                  lambda d: "Cole o link do post viral" in d.find_element(By.TAG_NAME, "body").text
+              )
+              time.sleep(4)
+              body = driver.find_element(By.TAG_NAME, "body").text
+
+              if "Estado do sistema" not in body:
+                  for selector in (
+                      '[data-testid="stSidebarCollapsedControl"] button',
+                      '[data-testid="collapsedControl"] button',
+                      'button[aria-label*="sidebar" i]',
+                  ):
+                      candidates = driver.find_elements(By.CSS_SELECTOR, selector)
+                      if candidates:
+                          try:
+                              candidates[0].click()
+                              time.sleep(2)
+                              break
+                          except Exception:
+                              pass
+                  body = driver.find_element(By.TAG_NAME, "body").text
+
+              checks = {
+                  "UI link-only": "Cole o link do post viral" in body and "Descobrir por que viralizou" in body,
+                  "FFmpeg": "FFmpeg: disponível" in body,
+                  "Apify": "Coleta pública: Apify + fallbacks" in body,
+                  "Memória D1": "Memória longitudinal: cloudflare_d1" in body,
+                  "IA multimodal": "IA multimodal:" in body and "IA multimodal: sem chave" not in body,
+                  "Download automático": "Download automático da mídia" in body,
+              }
+              for label, ok in checks.items():
+                  print(f"{label}: {'READY' if ok else 'MISSING'}")
+              failed = [label for label, ok in checks.items() if not ok]
+              if failed:
+                  raise SystemExit("Runtime incompleto: " + ", ".join(failed))
+          finally:
+              driver.quit()
+          PY
