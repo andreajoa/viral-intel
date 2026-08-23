@@ -73,9 +73,7 @@ class CloudEntrypointTests(unittest.TestCase):
     def test_cloud_entrypoint_recovers_from_stale_settings_module(self):
         previous = {key: os.environ.get(key) for key in _ENV_KEYS}
         previous_app_modules = {
-            name: module
-            for name, module in sys.modules.items()
-            if name == "app" or name.startswith("app.")
+            name: module for name, module in sys.modules.items() if name == "app" or name.startswith("app.")
         }
 
         stale_config = types.ModuleType("app.config")
