@@ -2,7 +2,7 @@ name: Cloudflare Activation Observer
 
 on:
   workflow_run:
-    workflows: ["Cloudflare Production Activation"]
+    workflows: ["Cloudflare Free Production Activation"]
     types: [completed]
 
 permissions:
@@ -28,7 +28,7 @@ jobs:
           run_url="https://github.com/${REPOSITORY}/actions/runs/${RUN_ID}"
           title="Cloudflare activation #${RUN_NUMBER}: ${CONCLUSION}"
           body=$(cat <<EOF
-          Automated sanitized status for the Viral Intel Cloudflare activation.
+          Automated sanitized status for the Viral Intel Cloudflare Free activation.
 
           - Status: **${CONCLUSION}**
           - Activation run: ${run_url}
