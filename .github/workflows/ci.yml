@@ -91,8 +91,11 @@ jobs:
           EPHEMERAL_MODE: "true"
         run: python -m unittest discover -s tests -p 'test_dashboard_v3.py' -v
 
+      - name: Confirmar base path do reverse proxy
+        run: grep -F 'baseUrlPath = "viral-intel"' .streamlit/config.toml
+
   cloudflare-worker:
-    name: Cloudflare Worker + D1
+    name: Cloudflare Worker + D1 Free
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -115,9 +118,9 @@ jobs:
         run: npm run check
 
   cloudflare-app:
-    name: Cloudflare Container App
+    name: Cloudflare Free Streamlit Proxy
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: infra/cloudflare-app
@@ -131,37 +134,17 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Instalar dependencias do gateway
+      - name: Instalar dependencias do proxy
         run: npm install --no-audit --no-fund
 
-      - name: Validar tipos e bundle do gateway
+      - name: Validar tipos e bundles de staging/producao
         run: npm run check && npm run check:staging
 
-      - name: Construir imagem real do Viral Intel
-        run: docker build -f ../../Dockerfile.cloudflare -t viral-intel-cloudflare:test ../..
-
-      - name: Subir container e validar base path do Streamlit
+      - name: Garantir compatibilidade com Workers Free
         shell: bash
         run: |
           set -euo pipefail
-          docker run -d --name viral-intel-test -p 8080:8080 \
-            -e CLOUDFLARE_MEMORY_URL=https://memory.invalid \
-            -e CLOUDFLARE_MEMORY_SECRET=ci-memory-secret-with-24-chars \
-            viral-intel-cloudflare:test
-
-          ok=0
-          for attempt in $(seq 1 45); do
-            if curl --fail --silent http://127.0.0.1:8080/viral-intel/_stcore/health >/dev/null; then
-              ok=1
-              break
-            fi
-            sleep 2
-          done
-
-          if [ "$ok" -ne 1 ]; then
-            docker logs viral-intel-test
-            exit 1
-          fi
-
-          docker inspect --format='{{json .State.Health}}' viral-intel-test || true
-          docker logs --tail 80 viral-intel-test
+          ! grep -R '"containers"' wrangler.production.jsonc wrangler.staging.jsonc
+          ! grep -R '"durable_objects"' wrangler.production.jsonc wrangler.staging.jsonc
+          grep -F '"STREAMLIT_ORIGIN": "https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app"' wrangler.production.jsonc
+          grep -F '"STREAMLIT_ORIGIN": "https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app"' wrangler.staging.jsonc
