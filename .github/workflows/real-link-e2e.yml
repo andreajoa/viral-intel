@@ -38,21 +38,50 @@ jobs:
           options.add_argument("--window-size=1600,1800")
 
           driver = webdriver.Chrome(options=options)
+
+          def form_ready():
+              inputs = driver.find_elements(By.TAG_NAME, "input")
+              buttons = driver.find_elements(By.TAG_NAME, "button")
+              return bool(inputs) and any("Descobrir por que viralizou" in (b.text or "") for b in buttons)
+
+          def enter_app_context():
+              driver.switch_to.default_content()
+              if form_ready():
+                  return True
+              frames = driver.find_elements(By.TAG_NAME, "iframe")
+              for frame in frames:
+                  try:
+                      driver.switch_to.default_content()
+                      driver.switch_to.frame(frame)
+                      if form_ready():
+                          return True
+                  except Exception:
+                      pass
+              driver.switch_to.default_content()
+              return False
+
           try:
               driver.get(os.environ["TARGET_URL"])
-              deadline = time.time() + 90
+              deadline = time.time() + 150
               while time.time() < deadline:
-                  inputs = driver.find_elements(By.TAG_NAME, "input")
-                  buttons = driver.find_elements(By.TAG_NAME, "button")
-                  if inputs and any("Descobrir por que viralizou" in (b.text or "") for b in buttons):
+                  if enter_app_context():
                       break
                   time.sleep(2)
               else:
+                  driver.switch_to.default_content()
+                  outer = driver.find_element(By.TAG_NAME, "body").text[:1000]
+                  print("FORM_DEBUG_TITLE=" + driver.title)
+                  print("FORM_DEBUG_OUTER=" + outer.replace("\n", " | "))
+                  print("FORM_DEBUG_IFRAMES=" + str(len(driver.find_elements(By.TAG_NAME, "iframe"))))
                   raise SystemExit("FORM_NOT_READY")
 
-              inputs = driver.find_elements(By.TAG_NAME, "input")
+              link_inputs = driver.find_elements(By.CSS_SELECTOR, 'input[aria-label="Link público"]')
+              inputs = link_inputs or [item for item in driver.find_elements(By.TAG_NAME, "input") if item.is_displayed()]
+              if not inputs:
+                  raise SystemExit("LINK_INPUT_NOT_FOUND")
               inputs[0].clear()
               inputs[0].send_keys(os.environ["TEST_POST_URL"])
+
               for button in driver.find_elements(By.TAG_NAME, "button"):
                   if "Descobrir por que viralizou" in (button.text or ""):
                       driver.execute_script("arguments[0].scrollIntoView({block:'center'});", button)
@@ -67,7 +96,10 @@ jobs:
                   try:
                       body = driver.find_element(By.TAG_NAME, "body").text
                   except Exception:
-                      body = ""
+                      if not enter_app_context():
+                          time.sleep(2)
+                          continue
+                      body = driver.find_element(By.TAG_NAME, "body").text
                   if "Investigação concluída" in body:
                       break
                   if "Não foi possível investigar o link automaticamente" in body:
@@ -78,6 +110,7 @@ jobs:
                       raise SystemExit("LIVE_ANALYSIS_FAILED")
                   time.sleep(4)
               else:
+                  print("TIMEOUT_BODY_TAIL=" + " | ".join(body.splitlines()[-25:])[:1800])
                   raise SystemExit("LIVE_ANALYSIS_TIMEOUT")
 
               required = {
@@ -97,7 +130,15 @@ jobs:
                       raise SystemExit("MISSING_SECTION_" + key.upper())
 
               lines = [line.strip() for line in body.splitlines() if line.strip()]
-              for label in ("Cobertura automática", "Arquivos de mídia", "Comentários coletados", "Posts do criador", "Veredito", "Amostra do criador", "Vs. mediana do criador"):
+              for label in (
+                  "Cobertura automática",
+                  "Arquivos de mídia",
+                  "Comentários coletados",
+                  "Posts do criador",
+                  "Veredito",
+                  "Amostra do criador",
+                  "Vs. mediana do criador",
+              ):
                   try:
                       index = lines.index(label)
                   except ValueError:
