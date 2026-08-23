@@ -93,9 +93,7 @@ class StructuralHTMLParser(HTMLParser):
                 asset_host, path = normalized
                 self.asset_paths.add(f"{asset_host}{path}")
 
-    def handle_startendtag(
-        self, tag: str, attrs: list[tuple[str, str | None]]
-    ) -> None:
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
         self.handle_endtag(tag)
 
@@ -172,10 +170,7 @@ def compare_fingerprints(
     else:
         delta_pct = abs(current_bytes - baseline_bytes) * 100 / baseline_bytes
         if delta_pct > max_byte_delta_pct:
-            errors.append(
-                f"html_bytes changed by {delta_pct:.2f}% "
-                f"(allowed {max_byte_delta_pct:.2f}%)"
-            )
+            errors.append(f"html_bytes changed by {delta_pct:.2f}% (allowed {max_byte_delta_pct:.2f}%)")
 
     return errors
 
