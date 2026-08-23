@@ -20,13 +20,16 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install --disable-pip-version-check selenium
       - name: Check Cloudflare D1 memory health
+        shell: bash
         run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 \
+            https://vi-memory.andre-almeida.online/health > /tmp/d1-health.json
           python - <<'PY'
           import json
-          import urllib.request
+          from pathlib import Path
 
-          with urllib.request.urlopen("https://vi-memory.andre-almeida.online/health", timeout=20) as response:
-              data = json.load(response)
+          data = json.loads(Path("/tmp/d1-health.json").read_text())
           ok = bool(data.get("ok")) and data.get("service") == "viral-intel-memory"
           schema = str(data.get("schema_version") or "unknown")
           print(f"D1_HEALTH={'yes' if ok else 'no'}")
