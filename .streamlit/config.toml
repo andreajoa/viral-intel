@@ -1,6 +1,13 @@
 [server]
 maxUploadSize = 100
 maxMessageSize = 110
+baseUrlPath = "viral-intel"
+enableCORS = true
+corsAllowedOrigins = [
+  "https://andre-almeida.online",
+  "https://viral-intel-staging.andre-almeida.online",
+  "https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app"
+]
 
 [theme]
 primaryColor = "#A64B2A"

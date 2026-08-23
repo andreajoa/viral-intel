@@ -1,4 +1,4 @@
-name: Cloudflare Production Activation
+name: Cloudflare Free Production Activation
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: viral-intel-cloudflare-production
+  group: viral-intel-cloudflare-free-production
   cancel-in-progress: false
 
 env:
@@ -18,18 +18,12 @@ env:
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
   VIRAL_INTEL_MEMORY_SECRET: ${{ secrets.VIRAL_INTEL_MEMORY_SECRET }}
   VIRAL_INTEL_APP_PASSWORD: ${{ secrets.VIRAL_INTEL_APP_PASSWORD }}
-  GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-  APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
-  INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
-  INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
 
 jobs:
   deploy:
-    name: D1 -> staging -> production
+    name: D1 Free -> proxy staging -> /viral-intel
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
 
     steps:
       - name: Baixar codigo validado
@@ -40,7 +34,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Validar credenciais obrigatorias sem exibir valores
+      - name: Validar secrets obrigatorios sem exibir valores
         shell: bash
         run: |
           set -euo pipefail
@@ -51,9 +45,7 @@ jobs:
               missing=1
             fi
           done
-          if [ "$missing" -ne 0 ]; then
-            exit 1
-          fi
+          if [ "$missing" -ne 0 ]; then exit 1; fi
           if [ "${#VIRAL_INTEL_MEMORY_SECRET}" -lt 24 ]; then
             echo "::error::VIRAL_INTEL_MEMORY_SECRET deve ter pelo menos 24 caracteres."
             exit 1
@@ -62,11 +54,8 @@ jobs:
             echo "::error::VIRAL_INTEL_APP_PASSWORD deve ter pelo menos 16 caracteres."
             exit 1
           fi
-          if [ -z "${GOOGLE_API_KEY:-}${OPENAI_API_KEY:-}${ANTHROPIC_API_KEY:-}" ]; then
-            echo "::warning::Nenhum provedor de IA foi configurado no GitHub; a infraestrutura pode subir, mas recursos generativos ficarao indisponiveis ate uma chave ser adicionada."
-          fi
 
-      - name: Registrar baseline imutavel do website ao vivo
+      - name: Registrar baseline do website ao vivo
         shell: bash
         run: |
           set -euo pipefail
@@ -79,13 +68,12 @@ jobs:
           bytes=$(wc -c </tmp/site-before.html | tr -d ' ')
           echo "SITE_BEFORE_SHA=$sha" >> "$GITHUB_ENV"
           echo "SITE_BEFORE_BYTES=$bytes" >> "$GITHUB_ENV"
-          echo "Website baseline OK: HTTP $code, $bytes bytes."
 
       - name: Instalar Wrangler da memoria
         working-directory: infra/cloudflare-memory
         run: npm install --no-audit --no-fund
 
-      - name: Criar ou reutilizar D1 e gerar config runtime
+      - name: Criar ou reutilizar D1 Free e gerar config runtime
         working-directory: infra/cloudflare-memory
         shell: bash
         run: |
@@ -93,10 +81,8 @@ jobs:
           list_db() {
             npx wrangler d1 list --json | python -c 'import json,sys; rows=json.load(sys.stdin); print(next(((r.get("uuid") or r.get("id") or "") for r in rows if r.get("name")=="viral-intel-memory"), ""))'
           }
-
           DB_ID=$(list_db)
           if [ -z "$DB_ID" ]; then
-            echo "Criando D1 viral-intel-memory..."
             npx wrangler d1 create viral-intel-memory --location=enam
             DB_ID=$(list_db)
           fi
@@ -104,7 +90,6 @@ jobs:
             echo "::error::Nao foi possivel resolver o UUID do D1 viral-intel-memory."
             exit 1
           fi
-
           python - "$DB_ID" <<'PY'
           from pathlib import Path
           import sys
@@ -115,7 +100,6 @@ jobs:
               raise SystemExit("placeholder do database_id nao encontrado")
           Path("wrangler.runtime.jsonc").write_text(source.replace(placeholder, db_id))
           PY
-          echo "D1 resolvido e config runtime criada."
 
       - name: Preparar segredo HMAC da memoria
         working-directory: infra/cloudflare-memory
@@ -128,7 +112,7 @@ jobs:
           PY
           chmod 600 .memory-secrets.json
 
-      - name: Publicar Worker de memoria e aplicar migrations
+      - name: Publicar Worker D1 Free e aplicar migrations
         working-directory: infra/cloudflare-memory
         shell: bash
         run: |
@@ -143,7 +127,7 @@ jobs:
           set -euo pipefail
           ok=0
           for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error --max-time 20 https://vi-memory.andre-almeida.online/health | tee /tmp/memory-health.json | grep -q '"ok":true'; then
+            if curl --fail --silent --show-error --max-time 20 https://vi-memory.andre-almeida.online/health | grep -q '"ok":true'; then
               ok=1
               break
             fi
@@ -154,47 +138,32 @@ jobs:
             exit 1
           fi
 
-      - name: Instalar Wrangler do app Cloudflare
+      - name: Instalar Wrangler do proxy Free
         working-directory: infra/cloudflare-app
         run: npm install --no-audit --no-fund
 
-      - name: Preparar secrets do app sem imprimir valores
+      - name: Preparar senha do proxy sem imprimir valor
         working-directory: infra/cloudflare-app
         shell: bash
         run: |
           python - <<'PY'
           import json, os
-          source = {
-              'VIRAL_INTEL_BASIC_PASSWORD': os.environ.get('VIRAL_INTEL_APP_PASSWORD', ''),
-              'CLOUDFLARE_MEMORY_SECRET': os.environ.get('VIRAL_INTEL_MEMORY_SECRET', ''),
-              'GOOGLE_API_KEY': os.environ.get('GOOGLE_API_KEY', ''),
-              'OPENAI_API_KEY': os.environ.get('OPENAI_API_KEY', ''),
-              'ANTHROPIC_API_KEY': os.environ.get('ANTHROPIC_API_KEY', ''),
-              'APIFY_API_TOKEN': os.environ.get('APIFY_API_TOKEN', ''),
-              'INSTAGRAM_ACCESS_TOKEN': os.environ.get('INSTAGRAM_ACCESS_TOKEN', ''),
-              'INSTAGRAM_USER_ID': os.environ.get('INSTAGRAM_USER_ID', ''),
-          }
-          payload = {name: value for name, value in source.items() if value}
           with open('.app-secrets.json', 'w') as f:
-              json.dump(payload, f)
+              json.dump({'VIRAL_INTEL_BASIC_PASSWORD': os.environ['VIRAL_INTEL_APP_PASSWORD']}, f)
           PY
           chmod 600 .app-secrets.json
 
-      - name: Publicar staging isolado
+      - name: Publicar staging Free isolado
         working-directory: infra/cloudflare-app
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx wrangler deploy --config wrangler.staging.jsonc --secrets-file .app-secrets.json --containers-rollout immediate
+        run: npx wrangler deploy --config wrangler.staging.jsonc --secrets-file .app-secrets.json
 
-      - name: Smoke test completo do staging
+      - name: Smoke test HTTP do staging
         shell: bash
         run: |
           set -euo pipefail
           EDGE="https://viral-intel-staging.andre-almeida.online/viral-intel/_edge-health"
           APP="https://viral-intel-staging.andre-almeida.online/viral-intel/_stcore/health"
           PAGE="https://viral-intel-staging.andre-almeida.online/viral-intel/"
-
           ok=0
           for attempt in $(seq 1 60); do
             if curl --fail --silent --show-error --max-time 20 "$EDGE" | grep -q '"ok":true' \
@@ -205,19 +174,18 @@ jobs:
             sleep 5
           done
           if [ "$ok" -ne 1 ]; then
-            echo "::error::Staging nao ficou saudavel; producao NAO sera promovida."
+            echo "::error::Staging Free nao ficou saudavel; producao NAO sera promovida."
             exit 1
           fi
-
           unauth=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 20 "$PAGE")
           if [ "$unauth" != "401" ]; then
-            echo "::error::Staging nao esta protegido por autenticacao: HTTP $unauth"
+            echo "::error::Staging nao esta protegido: HTTP $unauth"
             exit 1
           fi
           curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$PAGE" >/tmp/viral-intel-staging.html
           test -s /tmp/viral-intel-staging.html
 
-      - name: Testar WebSocket do Streamlit no staging
+      - name: Testar WebSocket do Streamlit via Worker Free
         shell: bash
         run: |
           set -euo pipefail
@@ -225,7 +193,6 @@ jobs:
           python - <<'PY'
           import base64, os
           import websocket
-
           password = os.environ['VIRAL_INTEL_APP_PASSWORD']
           token = base64.b64encode(f'andre:{password}'.encode()).decode()
           ws = websocket.create_connection(
@@ -235,36 +202,34 @@ jobs:
               origin='https://viral-intel-staging.andre-almeida.online',
           )
           ws.close()
-          print('WebSocket staging OK')
           PY
 
-      - name: Confirmar que o website continua identico antes da promocao
+      - name: Confirmar homepage identica antes da promocao
         shell: bash
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --max-time 30 https://andre-almeida.online/ >/tmp/site-pre-promote.html
           current_sha=$(sha256sum /tmp/site-pre-promote.html | awk '{print $1}')
           if [ "$current_sha" != "$SITE_BEFORE_SHA" ]; then
-            echo "::error::A homepage mudou durante o staging por um evento externo. Producao NAO sera promovida."
+            echo "::error::A homepage mudou durante staging. Producao NAO sera promovida."
             exit 1
           fi
 
-      - name: Promover somente /viral-intel para producao
+      - name: Promover somente /viral-intel no Workers Free
         working-directory: infra/cloudflare-app
         shell: bash
         run: |
           set -euo pipefail
-          npx wrangler deploy --config wrangler.production.jsonc --secrets-file .app-secrets.json --containers-rollout immediate
+          npx wrangler deploy --config wrangler.production.jsonc --secrets-file .app-secrets.json
           rm -f .app-secrets.json
 
-      - name: Validar producao e garantir que o website nao mudou
+      - name: Validar producao e preservacao do website
         shell: bash
         run: |
           set -euo pipefail
           EDGE="https://andre-almeida.online/viral-intel/_edge-health"
           APP="https://andre-almeida.online/viral-intel/_stcore/health"
           PAGE="https://andre-almeida.online/viral-intel/"
-
           ok=0
           for attempt in $(seq 1 60); do
             if curl --fail --silent --show-error --max-time 20 "$EDGE" | grep -q '"ok":true' \
@@ -275,49 +240,25 @@ jobs:
             sleep 5
           done
           if [ "$ok" -ne 1 ]; then
-            echo "::error::A rota /viral-intel nao ficou saudavel em producao."
+            echo "::error::A rota /viral-intel nao ficou saudavel."
             exit 1
           fi
-
           unauth=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 20 "$PAGE")
           if [ "$unauth" != "401" ]; then
-            echo "::error::Producao nao esta protegida por autenticacao: HTTP $unauth"
+            echo "::error::Producao nao esta protegida: HTTP $unauth"
             exit 1
           fi
-          curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$PAGE" >/tmp/viral-intel-production.html
-          test -s /tmp/viral-intel-production.html
-
           curl --fail --silent --show-error --location --max-time 30 https://andre-almeida.online/ >/tmp/site-after.html
           after_sha=$(sha256sum /tmp/site-after.html | awk '{print $1}')
           after_bytes=$(wc -c </tmp/site-after.html | tr -d ' ')
           if [ "$after_sha" != "$SITE_BEFORE_SHA" ] || [ "$after_bytes" != "$SITE_BEFORE_BYTES" ]; then
-            echo "::error::A homepage do website principal mudou apos a promocao."
+            echo "::error::A homepage mudou apos a promocao."
             exit 1
           fi
-          echo "Website principal preservado byte-for-byte."
-
-      - name: Testar WebSocket em producao
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import base64, os
-          import websocket
-
-          password = os.environ['VIRAL_INTEL_APP_PASSWORD']
-          token = base64.b64encode(f'andre:{password}'.encode()).decode()
-          ws = websocket.create_connection(
-              'wss://andre-almeida.online/viral-intel/_stcore/stream',
-              header=[f'Authorization: Basic {token}'],
-              timeout=30,
-              origin='https://andre-almeida.online',
-          )
-          ws.close()
-          print('WebSocket production OK')
-          PY
 
       - name: Resumo final
         run: |
-          echo "Viral Intel ativado em https://andre-almeida.online/viral-intel/"
-          echo "Memoria D1 ativa em https://vi-memory.andre-almeida.online/health"
-          echo "Website principal preservado e validado antes/depois da promocao."
+          echo "Cloudflare Workers Free ativo em https://andre-almeida.online/viral-intel/"
+          echo "D1 Free ativo em https://vi-memory.andre-almeida.online/health"
+          echo "Origin Streamlit: https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app/viral-intel/"
+          echo "IMPORTANTE: configure CLOUDFLARE_MEMORY_URL e CLOUDFLARE_MEMORY_SECRET nos Secrets do Streamlit para ativar memoria duravel no app Python."

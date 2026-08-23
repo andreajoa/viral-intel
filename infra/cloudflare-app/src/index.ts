@@ -1,21 +1,9 @@
-import { Container } from "@cloudflare/containers";
-import { env as runtimeBindings } from "cloudflare:workers";
-
 type RuntimeEnv = CloudflareEnv & {
-  VIRAL_INTEL: DurableObjectNamespace<ViralIntelContainer>;
   VIRAL_INTEL_BASIC_USER?: string;
   VIRAL_INTEL_BASIC_PASSWORD?: string;
-  CLOUDFLARE_MEMORY_URL?: string;
-  CLOUDFLARE_MEMORY_SECRET?: string;
-  GOOGLE_API_KEY?: string;
-  OPENAI_API_KEY?: string;
-  ANTHROPIC_API_KEY?: string;
-  APIFY_API_TOKEN?: string;
-  INSTAGRAM_ACCESS_TOKEN?: string;
-  INSTAGRAM_USER_ID?: string;
+  STREAMLIT_ORIGIN?: string;
 };
 
-const bindings = runtimeBindings as unknown as RuntimeEnv;
 const encoder = new TextEncoder();
 
 function responseJson(data: Record<string, unknown>, status = 200): Response {
@@ -52,9 +40,10 @@ function validBasicAuth(request: Request, env: RuntimeEnv): boolean {
     const decoded = atob(header.slice(6));
     const separator = decoded.indexOf(":");
     if (separator < 0) return false;
-    const user = decoded.slice(0, separator);
-    const password = decoded.slice(separator + 1);
-    return constantTimeEqual(user, expectedUser) && constantTimeEqual(password, expectedPassword);
+    return (
+      constantTimeEqual(decoded.slice(0, separator), expectedUser) &&
+      constantTimeEqual(decoded.slice(separator + 1), expectedPassword)
+    );
   } catch {
     return false;
   }
@@ -71,44 +60,58 @@ function authRequired(): Response {
   });
 }
 
-export class ViralIntelContainer extends Container {
-  defaultPort = 8080;
-  sleepAfter = "20m";
+function getStreamlitOrigin(env: RuntimeEnv): URL {
+  const configured = (env.STREAMLIT_ORIGIN ?? "").trim();
+  if (!configured) throw new Error("STREAMLIT_ORIGIN is not configured");
+  const url = new URL(configured);
+  if (url.protocol !== "https:") throw new Error("STREAMLIT_ORIGIN must use HTTPS");
+  return url;
+}
 
-  envVars = {
-    VIRAL_INTEL_EXECUTION: "cloudflare",
-    DATA_DIR: "/tmp/viral-intel-data",
-    LOCAL_MEDIA_DIR: "/tmp/viral-intel-data/inbox",
-    ENABLE_TRANSCRIPTION: "false",
-    EPHEMERAL_MODE: "true",
-    ENABLE_PERSISTENCE: "true",
-    ENABLE_NATIVE_VIDEO_AI: "true",
-    ENABLE_SEMANTIC_COMMENTS: "true",
-    MAX_UPLOAD_MB: "100",
-    COMMAND_TIMEOUT_SECONDS: "120",
-    AI_PROVIDER: "auto",
-    CLOUDFLARE_MEMORY_URL: bindings.CLOUDFLARE_MEMORY_URL ?? "",
-    CLOUDFLARE_MEMORY_SECRET: bindings.CLOUDFLARE_MEMORY_SECRET ?? "",
-    GOOGLE_API_KEY: bindings.GOOGLE_API_KEY ?? "",
-    OPENAI_API_KEY: bindings.OPENAI_API_KEY ?? "",
-    ANTHROPIC_API_KEY: bindings.ANTHROPIC_API_KEY ?? "",
-    APIFY_API_TOKEN: bindings.APIFY_API_TOKEN ?? "",
-    INSTAGRAM_ACCESS_TOKEN: bindings.INSTAGRAM_ACCESS_TOKEN ?? "",
-    INSTAGRAM_USER_ID: bindings.INSTAGRAM_USER_ID ?? "",
+async function proxyToStreamlit(request: Request, env: RuntimeEnv): Promise<Response> {
+  const incoming = new URL(request.url);
+  const origin = getStreamlitOrigin(env);
+  const target = new URL(incoming.pathname + incoming.search, origin);
+
+  const headers = new Headers(request.headers);
+  headers.delete("Authorization");
+  headers.delete("Host");
+  headers.set("X-Forwarded-Host", incoming.host);
+  headers.set("X-Forwarded-Proto", "https");
+
+  const init: RequestInit = {
+    method: request.method,
+    headers,
+    redirect: "manual",
   };
-
-  override onStart(): void {
-    console.log(JSON.stringify({ event: "viral_intel_container_started" }));
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    init.body = request.body;
   }
 
-  override onStop(): void {
-    console.log(JSON.stringify({ event: "viral_intel_container_stopped" }));
+  const upstream = await fetch(new Request(target.toString(), init));
+  const responseHeaders = new Headers(upstream.headers);
+  responseHeaders.set("X-Viral-Intel-Proxy", "cloudflare-free");
+
+  const location = responseHeaders.get("Location");
+  if (location) {
+    try {
+      const redirect = new URL(location, origin);
+      if (redirect.origin === origin.origin) {
+        redirect.protocol = incoming.protocol;
+        redirect.host = incoming.host;
+        responseHeaders.set("Location", redirect.toString());
+      }
+    } catch {
+      // Keep non-URL Location values unchanged.
+    }
   }
 
-  override onError(error: unknown): void {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(JSON.stringify({ event: "viral_intel_container_error", message }));
-  }
+  return new Response(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers: responseHeaders,
+    webSocket: upstream.webSocket,
+  });
 }
 
 export default {
@@ -116,13 +119,25 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/viral-intel/_edge-health") {
-      return responseJson({
-        ok: true,
-        service: "viral-intel-edge",
-        container: "cloudflare",
-        memory_configured: Boolean(env.CLOUDFLARE_MEMORY_URL && env.CLOUDFLARE_MEMORY_SECRET),
-        ai_configured: Boolean(env.GOOGLE_API_KEY || env.OPENAI_API_KEY || env.ANTHROPIC_API_KEY),
-      });
+      try {
+        const origin = getStreamlitOrigin(env);
+        return responseJson({
+          ok: true,
+          service: "viral-intel-edge",
+          hosting: "streamlit-community-cloud",
+          cloudflare_plan: "free-compatible",
+          origin_host: origin.host,
+        });
+      } catch (error) {
+        return responseJson(
+          {
+            ok: false,
+            service: "viral-intel-edge",
+            error: error instanceof Error ? error.message : String(error),
+          },
+          503,
+        );
+      }
     }
 
     if (url.pathname === "/viral-intel") {
@@ -138,7 +153,16 @@ export default {
       return authRequired();
     }
 
-    const container = env.VIRAL_INTEL.getByName("primary");
-    return container.fetch(request);
+    try {
+      return await proxyToStreamlit(request, env);
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          event: "streamlit_proxy_error",
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return responseJson({ ok: false, error: "Upstream unavailable" }, 502);
+    }
   },
 } satisfies ExportedHandler<RuntimeEnv>;

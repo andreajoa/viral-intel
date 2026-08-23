@@ -17,30 +17,8 @@
   ],
   "vars": {
     "VIRAL_INTEL_BASIC_USER": "andre",
-    "CLOUDFLARE_MEMORY_URL": "https://vi-memory.andre-almeida.online"
+    "STREAMLIT_ORIGIN": "https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app"
   },
-  "containers": [
-    {
-      "class_name": "ViralIntelContainer",
-      "image": "../../Dockerfile.cloudflare",
-      "max_instances": 1,
-      "instance_type": "basic"
-    }
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "VIRAL_INTEL",
-        "class_name": "ViralIntelContainer"
-      }
-    ]
-  },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["ViralIntelContainer"]
-    }
-  ],
   "observability": {
     "enabled": true,
     "logs": {
