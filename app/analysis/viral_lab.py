@@ -1,20 +1,17 @@
 """Deterministic reverse engineering for public viral posts.
 
-This module intentionally separates what is publicly observed from what is inferred.
-It helps Viral Intel answer two questions for third-party posts:
-
-1. Is this post actually a breakout relative to the creator's recent public baseline?
-2. Which observable creative mechanisms are worth reproducing in an original adaptation?
-
-Private Insights (saves, true reach, retention, attributed follows, ranking weights) are
-never invented when the post belongs to someone else.
+The module separates public observation from inference. It measures whether a third-
+party post is a breakout relative to the creator's recent public baseline and converts
+observable creative mechanics into an original-adaptation brief. Private Insights are
+never invented.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from statistics import median
-from typing import Any, Iterable
+from typing import Any
 
 from app.models import ContentFormat, Platform, PostMetrics
 
@@ -49,7 +46,6 @@ def _format_from_public(row: dict[str, Any]) -> ContentFormat:
     ).upper()
     media_type = str(_first_present(row.get("media_type"), row.get("type")) or "").upper()
     url = str(_first_present(row.get("url"), row.get("post_url")) or "").lower()
-
     if "REEL" in product or "/reel/" in url:
         return ContentFormat.REEL
     if "SHORT" in product or "/shorts/" in url:
@@ -106,7 +102,10 @@ def public_history_to_posts(
                 row.get("comments"), row.get("commentsCount"), row.get("commentCount")
             ),
             "shares": _first_present(
-                row.get("shares"), row.get("sharesCount"), row.get("shareCount"), row.get("reshareCount")
+                row.get("shares"),
+                row.get("sharesCount"),
+                row.get("shareCount"),
+                row.get("reshareCount"),
             ),
             "reposts": _first_present(
                 row.get("reposts"), row.get("repostsCount"), row.get("repostCount")
@@ -170,11 +169,13 @@ def build_public_creator_baseline(
     ]
     same_format = [post for post in candidates if post.format == target.format]
     comparable = same_format if len(same_format) >= 5 else candidates
-
     metric = "views" if target.views is not None else "likes" if target.likes is not None else "comments"
     target_value = getattr(target, metric, None)
-    values = [float(value) for post in comparable if (value := getattr(post, metric, None)) is not None]
-
+    values = [
+        float(value)
+        for post in comparable
+        if (value := getattr(post, metric, None)) is not None
+    ]
     result: dict[str, Any] = {
         "available": bool(target_value is not None and values),
         "source": "public_creator_history",
@@ -211,8 +212,13 @@ def build_public_creator_baseline(
     if target.views is not None and target.followers:
         confidence = min(98, confidence + 5)
 
-    engagement_values = [value for post in comparable if (value := _public_engagement(post)) is not None]
+    engagement_values = [
+        value for post in comparable if (value := _public_engagement(post)) is not None
+    ]
     median_engagement = float(median(engagement_values)) if engagement_values else None
+    engagement_lift = None
+    if result["public_engagement_rate_pct"] is not None and median_engagement:
+        engagement_lift = _ratio(result["public_engagement_rate_pct"], median_engagement)
 
     result.update(
         {
@@ -225,10 +231,8 @@ def build_public_creator_baseline(
             "median_public_engagement_rate_pct": round(median_engagement, 3)
             if median_engagement is not None
             else None,
-            "engagement_lift_multiple": round(
-                _ratio(result["public_engagement_rate_pct"], median_engagement), 3
-            )
-            if result["public_engagement_rate_pct"] is not None and median_engagement
+            "engagement_lift_multiple": round(engagement_lift, 3)
+            if engagement_lift is not None
             else None,
         }
     )
@@ -245,7 +249,6 @@ def build_viral_dna(
     """Build an evidence-first explanation of observable viral mechanics."""
 
     mechanics: list[dict[str, Any]] = []
-
     hook = str(technical.get("creative_primary_hook") or "").strip()
     hook_mechanisms = list(technical.get("creative_hook_mechanisms") or [])
     if hook or hook_mechanisms:
@@ -312,8 +315,7 @@ def build_viral_dna(
             comment_signals.append(f"{mention_rate:.1f}% da amostra contém marcações")
         if isinstance(question_rate, (int, float)):
             comment_signals.append(f"{question_rate:.1f}% da amostra contém perguntas")
-        intents = comments.get("intent_distribution") or []
-        for item in intents[:3]:
+        for item in (comments.get("intent_distribution") or [])[:3]:
             label = item.get("intent")
             share = item.get("share_of_sample_pct")
             if label and isinstance(share, (int, float)):
@@ -353,11 +355,9 @@ def build_viral_dna(
         bool(comments.get("available")),
         metrics.views is not None,
     ]
-    confidence = min(95, 25 + sum(confidence_inputs) * 14)
-
     return {
         "status": creator_baseline.get("status") or "INCONCLUSIVO",
-        "confidence": confidence,
+        "confidence": min(95, 25 + sum(confidence_inputs) * 14),
         "public_proof": proof,
         "mechanics": mechanics,
         "what_is_known": (
@@ -382,7 +382,6 @@ def build_replication_blueprint(
     preserve = list(dict.fromkeys(str(item) for item in plan.preserve if str(item).strip()))
     if not preserve:
         preserve = [str(item) for item in technical.get("creative_hook_mechanisms") or []][:5]
-
     avoid_copying = [
         "Não copiar frases completas, legenda, identidade visual, personagens ou cenas exclusivas do original.",
         "Não afirmar garantia de viralização; reproduzir apenas mecanismos testáveis.",
@@ -390,6 +389,16 @@ def build_replication_blueprint(
     ]
     target_context = niche.strip() or "meu nicho e meu público"
     evidence_summary = "; ".join(creator_baseline.get("limitations") or [])
+    preserve_lines = "\n- ".join(preserve or ["estrutura do gancho e progressão observadas"])
+    hook_lines = "\n- ".join(plan.hook_options)
+    structure_lines = "\n".join(
+        f"{index}. {item}" for index, item in enumerate(plan.structure, 1)
+    )
+    change_lines = "\n- ".join(plan.change or ["tema, exemplos, texto e elementos visuais"])
+    originality_lines = "\n- ".join(avoid_copying)
+    limitation = evidence_summary or (
+        "A análise usa sinais públicos e observáveis; métricas privadas do criador não estão disponíveis."
+    )
 
     prompt = f"""Você é um estrategista de conteúdo. Crie uma peça ORIGINAL para {target_context} usando apenas a arquitetura de atenção e engajamento abaixo como referência.
 
@@ -400,13 +409,13 @@ FORMATO
 {plan.format}
 
 MECÂNICAS A PRESERVAR
-- """ + "\n- ".join(preserve or ["estrutura do gancho e progressão observadas"]) + """
+- {preserve_lines}
 
 GANCHOS PARA ADAPTAR
-- """ + "\n- ".join(plan.hook_options) + """
+- {hook_lines}
 
 ESTRUTURA RECOMENDADA
-1. """ + "\n".join(f"{index}. {item}" for index, item in enumerate(plan.structure, 1)) + f"""
+{structure_lines}
 
 DIREÇÃO DA LEGENDA
 {plan.caption_direction}
@@ -415,13 +424,13 @@ CTA
 {plan.cta}
 
 ALTERAR EM RELAÇÃO AO ORIGINAL
-- """ + "\n- ".join(plan.change or ["tema, exemplos, texto e elementos visuais"]) + """
+- {change_lines}
 
 REGRAS DE ORIGINALIDADE
-- """ + "\n- ".join(avoid_copying) + f"""
+- {originality_lines}
 
 LIMITE DOS DADOS
-{evidence_summary or 'A análise usa sinais públicos e observáveis; métricas privadas do criador não estão disponíveis.'}
+{limitation}
 
 ENTREGUE
 1. conceito da nova peça;
@@ -433,7 +442,6 @@ ENTREGUE
 7. três variações de gancho;
 8. o que foi preservado como mecanismo e o que foi alterado para manter originalidade.
 """
-
     return {
         "objective": plan.objective,
         "format": plan.format,
