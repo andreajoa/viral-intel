@@ -52,7 +52,7 @@ class PipelineTests(unittest.TestCase):
                 use_ai=False,
                 settings=settings,
             )
-            self.assertEqual(report.schema_version, "3.0")
+            self.assertEqual(report.schema_version, "5.0")
             self.assertEqual(report.provider, "deterministic")
             self.assertTrue((settings.exports_dir / f"{report.report_id}.json").is_file())
             self.assertTrue((settings.exports_dir / f"{report.report_id}.md").is_file())
