@@ -5,7 +5,6 @@ from __future__ import annotations
 import shutil
 import uuid
 from dataclasses import replace
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -85,7 +84,12 @@ def _manual_public_metrics(package: dict[str, Any]) -> dict[str, Any]:
 def _profile_key(package: dict[str, Any], platform: Platform) -> str:
     account = package.get("account") if isinstance(package.get("account"), dict) else {}
     account_id = str(account.get("id") or "").strip()
-    username = str(account.get("username") or package.get("uploader") or "").strip().lstrip("@").lower()
+    username = (
+        str(account.get("username") or package.get("uploader") or "")
+        .strip()
+        .lstrip("@")
+        .lower()
+    )
     if account_id:
         return f"public:{platform.value}:id:{account_id}"
     if username:
@@ -137,7 +141,6 @@ def analyze_public_link(
 
     collection_dir = settings.temp_dir / ("public_link_" + uuid.uuid4().hex[:12])
     package: dict[str, Any] = {}
-    report: AnalysisEnvelope | None = None
     try:
         package = PublicPostPackageCollector(settings=settings).collect(clean_url, collection_dir)
         if not package.get("source_ok") and not package.get("downloaded_media_paths"):
