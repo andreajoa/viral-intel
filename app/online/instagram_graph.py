@@ -1,12 +1,13 @@
 """Authorized Instagram professional-account collection through Meta's official API.
 
-The collector is deliberately limited to media owned by the authenticated professional
-account. It returns aggregate Insights and available comments; it never attempts to
-scrape private liker, saver or sharer identities.
+The collector is limited to media owned by the authenticated professional account. It
+returns aggregate Insights and available comments and never attempts to discover private
+liker, saver or sharer identities.
 """
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -59,13 +60,13 @@ def _insight_value(item: dict[str, Any]) -> float | int | None:
     else:
         value = item.get("value")
     if isinstance(value, dict):
-        numeric = [entry for entry in value.values() if isinstance(entry, int | float)]
+        numeric = [entry for entry in value.values() if isinstance(entry, (int, float))]
         return sum(numeric) if numeric else None
-    return value if isinstance(value, int | float) else None
+    return value if isinstance(value, (int, float)) else None
 
 
 class InstagramGraphCollector:
-    """Read-only collector for an authenticated Instagram professional account."""
+    """Read-only collector with batching, pagination and bounded retry/backoff."""
 
     def __init__(
         self,
@@ -75,6 +76,8 @@ class InstagramGraphCollector:
         max_comments: int = 300,
         timeout: int = 30,
         session: requests.Session | None = None,
+        max_retries: int = 3,
+        backoff_seconds: float = 1.0,
     ):
         self.access_token = access_token.strip()
         self.ig_user_id = ig_user_id.strip()
@@ -82,6 +85,8 @@ class InstagramGraphCollector:
         self.max_comments = max(1, max_comments)
         self.timeout = max(5, timeout)
         self.session = session or requests.Session()
+        self.max_retries = max(1, max_retries)
+        self.backoff_seconds = max(0.1, backoff_seconds)
         self.base_url = f"https://graph.instagram.com/{self.api_version}"
 
     @property
@@ -97,17 +102,39 @@ class InstagramGraphCollector:
     def _get_url(self, url: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         query = dict(params or {})
         query["access_token"] = self.access_token
-        response = self.session.get(url, params=query, timeout=self.timeout)
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise RuntimeError(f"Resposta não JSON da Meta ({response.status_code})") from exc
-        if response.status_code >= 400 or payload.get("error"):
-            error = payload.get("error") or {}
-            message = error.get("message") or f"HTTP {response.status_code}"
-            code = error.get("code")
-            raise RuntimeError(f"Meta API: {message}" + (f" (código {code})" if code else ""))
-        return payload
+        last_error: Exception | None = None
+        for attempt in range(self.max_retries):
+            try:
+                response = self.session.get(url, params=query, timeout=self.timeout)
+                try:
+                    payload = response.json()
+                except ValueError as exc:
+                    raise RuntimeError(f"Resposta não JSON da Meta ({response.status_code})") from exc
+
+                if response.status_code < 400 and not payload.get("error"):
+                    return payload
+
+                error = payload.get("error") or {}
+                message = error.get("message") or f"HTTP {response.status_code}"
+                code = error.get("code")
+                current = RuntimeError(f"Meta API: {message}" + (f" (código {code})" if code else ""))
+                last_error = current
+                retryable = response.status_code in {429, 500, 502, 503, 504}
+                if not retryable or attempt + 1 >= self.max_retries:
+                    raise current
+                headers = getattr(response, "headers", {}) or {}
+                try:
+                    retry_after = float(headers.get("Retry-After") or 0)
+                except (TypeError, ValueError):
+                    retry_after = 0.0
+                delay = max(retry_after, self.backoff_seconds * (2**attempt))
+                time.sleep(min(delay, 20.0))
+            except requests.RequestException as exc:
+                last_error = exc
+                if attempt + 1 >= self.max_retries:
+                    raise RuntimeError(f"Falha de rede na Meta API: {exc}") from exc
+                time.sleep(min(self.backoff_seconds * (2**attempt), 20.0))
+        raise last_error or RuntimeError("Falha desconhecida na Meta API")
 
     def _get(self, object_path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         clean = object_path.strip("/")
@@ -136,7 +163,7 @@ class InstagramGraphCollector:
                     {"fields": fields, "limit": min(self.max_comments, 100)},
                 )
                 break
-            except Exception as exc:  # field availability changes by API setup/version
+            except Exception as exc:  # field availability changes by setup/version
                 last_error = exc
         if payload is None:
             if last_error:
@@ -166,34 +193,56 @@ class InstagramGraphCollector:
             payload = self._get_url(next_url)
         return comments
 
-    def fetch_insights(self, media_id: str, media_type: str = "") -> tuple[dict[str, Any], list[str]]:
-        """Query metrics individually so one unavailable metric does not erase the rest."""
+    @staticmethod
+    def _merge_insight_payload(payload: dict[str, Any], values: dict[str, Any]) -> None:
+        for item in payload.get("data") or []:
+            name = str(item.get("name") or "").strip()
+            value = _insight_value(item)
+            if name and value is not None:
+                values[name] = value
 
+    def _fetch_metric_batch(
+        self,
+        media_id: str,
+        metrics: list[str],
+        values: dict[str, Any],
+        notes: list[str],
+    ) -> None:
+        """Query a metric group, bisecting only when the API rejects the group.
+
+        This cuts normal history collection from dozens of requests per post to one or
+        two while retaining the previous resilience when a metric is unavailable for a
+        particular media type or API configuration.
+        """
+
+        if not metrics:
+            return
+        try:
+            payload = self._get(f"{media_id}/insights", {"metric": ",".join(metrics)})
+            self._merge_insight_payload(payload, values)
+            return
+        except Exception as exc:
+            if len(metrics) == 1:
+                notes.append(f"Métrica {metrics[0]} indisponível: {self._safe_error(exc)}")
+                return
+            midpoint = len(metrics) // 2
+            self._fetch_metric_batch(media_id, metrics[:midpoint], values, notes)
+            self._fetch_metric_batch(media_id, metrics[midpoint:], values, notes)
+
+    def fetch_insights(self, media_id: str, media_type: str = "") -> tuple[dict[str, Any], list[str]]:
         metrics = list(COMMON_INSIGHT_METRICS)
         if media_type.upper() in {"VIDEO", "REELS", "REEL"}:
             metrics.extend(VIDEO_INSIGHT_METRICS)
         values: dict[str, Any] = {}
         notes: list[str] = []
-        for metric in metrics:
-            try:
-                payload = self._get(f"{media_id}/insights", {"metric": metric})
-                for item in payload.get("data") or []:
-                    name = str(item.get("name") or metric)
-                    value = _insight_value(item)
-                    if value is not None:
-                        values[name] = value
-            except Exception as exc:
-                notes.append(f"Métrica {metric} indisponível: {self._safe_error(exc)}")
+        self._fetch_metric_batch(media_id, metrics, values, notes)
         return values, notes
 
     def list_recent_media(self, limit: int = 25) -> list[dict[str, Any]]:
         if not self.ig_user_id:
             return []
         limit = max(1, min(limit, 100))
-        payload = self._get(
-            f"{self.ig_user_id}/media",
-            {"fields": MEDIA_FIELDS, "limit": limit},
-        )
+        payload = self._get(f"{self.ig_user_id}/media", {"fields": MEDIA_FIELDS, "limit": limit})
         return list(payload.get("data") or [])[:limit]
 
     def resolve_media_id(self, permalink: str, limit: int = 50) -> str | None:
@@ -261,8 +310,8 @@ class InstagramGraphCollector:
                 return {
                     "source_ok": False,
                     "error": (
-                        "Não foi possível localizar o ID da mídia. Informe o ID oficial ou use um link "
-                        "entre as publicações recentes da conta autenticada."
+                        "Não foi possível localizar o ID da mídia. Informe o ID oficial ou use um link entre "
+                        "as publicações recentes da conta autenticada."
                     ),
                     "source_notes": [],
                 }
@@ -306,6 +355,7 @@ class InstagramGraphCollector:
                 "profile_history": history,
                 "source_notes": [
                     "Dados obtidos da API oficial para uma conta profissional autenticada.",
+                    "Insights são consultados em lotes com fallback seletivo para reduzir latência e quota.",
                     "A API fornece contagens agregadas, mas não identifica pessoas que curtiram, salvaram ou compartilharam.",
                     *insight_notes,
                     *history_notes,

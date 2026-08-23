@@ -4,7 +4,6 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
-# O Homebrew de Macs Apple Silicon nem sempre entra no PATH de shells antigos.
 if [ -x "/opt/homebrew/bin/brew" ]; then
   export PATH="/opt/homebrew/bin:$PATH"
 elif [ -x "/usr/local/bin/brew" ]; then
@@ -25,7 +24,11 @@ fi
 
 source .venv/bin/activate
 UPLOAD_LIMIT_MB="$(python -c 'from app.config import get_settings; print(get_settings().max_upload_mb)')"
-exec python -m streamlit run app/ui/dashboard.py \
+
+# O mesmo bootstrap é usado localmente e na nuvem, mas o marcador abaixo impede que
+# defaults efêmeros do Community Cloud sobrescrevam a configuração local do .env.
+export VIRAL_INTEL_EXECUTION=local
+exec python -m streamlit run cloud/streamlit_app.py \
   --server.headless=false \
   --server.address=127.0.0.1 \
   --server.maxUploadSize="$UPLOAD_LIMIT_MB" \

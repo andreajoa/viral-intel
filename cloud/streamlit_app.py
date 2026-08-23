@@ -1,4 +1,8 @@
-"""Production entrypoint for Streamlit Community Cloud."""
+"""Unified production bootstrap for Viral Intel 5.
+
+Core quality gates now live inside the observer, pipeline and verified strategist. The
+bootstrap intentionally performs no runtime monkey-patching.
+"""
 
 from __future__ import annotations
 
@@ -13,23 +17,20 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
-os.environ.setdefault("ENABLE_TRANSCRIPTION", "false")
-os.environ.setdefault("EPHEMERAL_MODE", "true")
-os.environ.setdefault("MAX_UPLOAD_MB", "100")
-os.environ.setdefault("COMMAND_TIMEOUT_SECONDS", "120")
-os.environ.setdefault("AI_PROVIDER", "auto")
+is_local_execution = os.getenv("VIRAL_INTEL_EXECUTION", "").strip().lower() == "local"
+if not is_local_execution:
+    os.environ.setdefault("ENABLE_TRANSCRIPTION", "false")
+    os.environ.setdefault("EPHEMERAL_MODE", "true")
+    remote_memory = bool(
+        os.getenv("CLOUDFLARE_MEMORY_URL", "").strip() and os.getenv("CLOUDFLARE_MEMORY_SECRET", "").strip()
+    )
+    os.environ.setdefault("ENABLE_PERSISTENCE", "true" if remote_memory else "false")
+    os.environ.setdefault("MAX_UPLOAD_MB", "100")
+    os.environ.setdefault("COMMAND_TIMEOUT_SECONDS", "120")
+    os.environ.setdefault("AI_PROVIDER", "auto")
 
 try:
-    from app.evidence_ingestion_guardrails import install_evidence_ingestion_guardrails
-    from app.instagram_fallback_guardrails import install_instagram_fallback_guardrails
-    from app.link_content_guardrails import install_link_content_guardrails
-    from app.runtime_guardrails import install_production_guardrails
-
-    install_production_guardrails()
-    install_link_content_guardrails()
-    install_instagram_fallback_guardrails()
-    install_evidence_ingestion_guardrails()
-    runpy.run_path(str(ROOT / "app" / "ui" / "dashboard_v3.py"), run_name="__main__")
+    runpy.run_path(str(ROOT / "app" / "ui" / "dashboard_v5.py"), run_name="__main__")
 except Exception as exc:
     import streamlit as st
 
@@ -38,8 +39,8 @@ except Exception as exc:
     )
     st.write(f"**Erro:** {type(exc).__name__}: {exc}")
     st.info(
-        "Confirme se o arquivo principal do app é `cloud/streamlit_app.py`, se o Python é 3.12 "
-        "e se `GOOGLE_API_KEY` foi cadastrado nos Secrets do Streamlit."
+        "Confirme `cloud/streamlit_app.py`, Python 3.12 e pelo menos uma chave de IA válida. "
+        "Para memória durável na nuvem, configure CLOUDFLARE_MEMORY_URL e CLOUDFLARE_MEMORY_SECRET."
     )
     with st.expander("Detalhes técnicos"):
         st.code(traceback.format_exc())

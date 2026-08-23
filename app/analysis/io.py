@@ -135,8 +135,9 @@ def comments_from_file(raw: bytes | str, filename: str = "") -> list[dict[str, A
 
 
 def _source_for(public: dict[str, Any]) -> str:
-    collection = str(public.get("collection_source") or "")
-    return "official_api" if collection.startswith("meta/") else "public"
+    collection = str(public.get("collection_source") or "").lower()
+    official_markers = ("authorized", "official", "meta/instagram-graph")
+    return "official_api" if any(marker in collection for marker in official_markers) else "public"
 
 
 def merge_metric_sources(
@@ -171,6 +172,8 @@ def merge_metric_sources(
         "accounts_engaged": public.get("accounts_engaged"),
         "duration_seconds": public.get("duration_seconds"),
         "average_watch_time_seconds": public.get("average_watch_time_seconds"),
+        "average_view_percentage": public.get("average_view_percentage"),
+        "impressions_ctr": public.get("impressions_ctr"),
         "replays": public.get("replays"),
         "skip_rate": public.get("skip_rate"),
         "source": _source_for(public) if public else "manual",

@@ -50,11 +50,7 @@ DERIVED_LABELS = {
         "%",
         "ações de circulação conhecidas ÷ curtidas × 100",
     ),
-    "comments_to_likes_pct": (
-        "Comentários por 100 curtidas",
-        "%",
-        "comentários ÷ curtidas × 100",
-    ),
+    "comments_to_likes_pct": ("Comentários por 100 curtidas", "%", "comentários ÷ curtidas × 100"),
     "circulation_to_comments_ratio": (
         "Circulação em relação aos comentários",
         "× comentários",
@@ -73,11 +69,7 @@ DERIVED_LABELS = {
     ),
     "views_per_follower_pct": ("Visualizações por seguidores", "%", "visualizações ÷ seguidores × 100"),
     "reach_per_follower_pct": ("Alcance por seguidores", "%", "alcance ÷ seguidores × 100"),
-    "impressions_per_reached_account": (
-        "Impressões por conta alcançada",
-        "×",
-        "impressões ÷ alcance",
-    ),
+    "impressions_per_reached_account": ("Impressões por conta alcançada", "×", "impressões ÷ alcance"),
     "like_rate_by_views_pct": ("Taxa de curtidas por views", "%", "curtidas ÷ visualizações × 100"),
     "like_rate_by_reach_pct": ("Taxa de curtidas por alcance", "%", "curtidas ÷ alcance × 100"),
     "comment_rate_by_views_pct": ("Taxa de comentários por views", "%", "comentários ÷ visualizações × 100"),
@@ -229,7 +221,7 @@ def build_evidence(
                 value=benchmark.comparable_posts,
                 unit="posts",
                 source="histórico do próprio perfil",
-                note=f"Estágio: {benchmark.lifecycle_bucket or 'não controlado'}",
+                note=f"Estágio: {benchmark.lifecycle_bucket or 'não controlado'}; força: {benchmark.evidence_strength}",
             )
         )
     if benchmark.ratio_to_median is not None:
@@ -243,7 +235,34 @@ def build_evidence(
                 unit="× mediana",
                 source="histórico comparável do próprio perfil",
                 formula=f"valor do post ÷ mediana de {benchmark.comparable_posts} posts comparáveis",
-                note=f"Percentil {benchmark.percentile}",
+                note=f"Percentil {benchmark.percentile}; método {benchmark.method}",
+            )
+        )
+    if benchmark.expected_low is not None and benchmark.expected_high is not None:
+        benchmark_index += 1
+        items.append(
+            EvidenceItem(
+                id=f"B{benchmark_index}",
+                kind="benchmark",
+                label=f"Intervalo esperado de {benchmark.primary_metric}",
+                value={"mínimo": benchmark.expected_low, "máximo": benchmark.expected_high},
+                source="modelo robusto do histórico comparável",
+                formula="mediana e dispersão robusta em log1p; envelope descritivo de aproximadamente 95%",
+                note="Intervalo específico do perfil, formato e estágio quando há amostra suficiente.",
+            )
+        )
+    if benchmark.robust_z_score is not None:
+        benchmark_index += 1
+        items.append(
+            EvidenceItem(
+                id=f"B{benchmark_index}",
+                kind="benchmark",
+                label="Anomalia robusta vs baseline",
+                value=benchmark.robust_z_score,
+                unit="z robusto",
+                source="modelo robusto do histórico comparável",
+                formula="distância em log1p ÷ escala robusta MAD/IQR",
+                note=f"Força da evidência do baseline: {benchmark.evidence_strength}",
             )
         )
     for name, ratio in benchmark.metric_ratios.items():
@@ -275,15 +294,15 @@ def build_evidence(
             item_id, kind, source = (
                 f"B{benchmark_index}",
                 "benchmark",
-                "histórico enviado ou autorizado do perfil",
+                "histórico enviado, autorizado ou persistido do perfil",
             )
-        elif key.startswith(("comment_", "distribution_", "algorithm_", "data_access_")):
+        elif key.startswith(("comment_", "distribution_", "algorithm_", "data_access_", "content_twin_")):
             calculated_index += 1
             item_id, kind = f"C{calculated_index}", "calculated"
             source = "análise determinística do Viral Intel"
         else:
             technical_index += 1
-            item_id, kind, source = f"T{technical_index}", "technical", "inspeção local da mídia"
+            item_id, kind, source = f"T{technical_index}", "technical", "inspeção local/multimodal da mídia"
         items.append(
             EvidenceItem(
                 id=item_id,

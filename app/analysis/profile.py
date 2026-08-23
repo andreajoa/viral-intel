@@ -6,6 +6,7 @@ from collections import defaultdict
 from statistics import median
 
 from app.analysis.metrics import derive_metrics
+from app.analysis.robust_stats import percentile, robust_expected_range
 from app.models import BenchmarkResult, PostMetrics
 
 BENCHMARK_METRICS = (
@@ -31,14 +32,6 @@ def lifecycle_bucket(age_hours: float | None) -> str | None:
     if age_hours < 168:
         return "3–7d"
     return "7d+"
-
-
-def _percentile(values: list[float], target: float) -> float:
-    if not values:
-        return 0.0
-    below = sum(value < target for value in values)
-    equal = sum(value == target for value in values)
-    return round(((below + 0.5 * equal) / len(values)) * 100, 1)
 
 
 def _row_values(post: PostMetrics) -> dict[str, float]:
@@ -78,6 +71,14 @@ def comparable_posts(target: PostMetrics, history: list[PostMetrics]) -> tuple[l
 
 
 def build_benchmark(target: PostMetrics, history: list[PostMetrics]) -> BenchmarkResult:
+    """Build an uncertainty-aware benchmark from the profile's own comparable posts.
+
+    Viral Intel 5 no longer decides performance from universal 0.75x/1.5x/3x thresholds.
+    It models the profile's observed dispersion in log space, then uses percentile,
+    robust anomaly score and quality metrics together. Ratio-to-median remains visible
+    for human readability and backwards compatibility.
+    """
+
     candidates, warnings = comparable_posts(target, history)
     target_values = _row_values(target)
     result = BenchmarkResult(
@@ -88,7 +89,7 @@ def build_benchmark(target: PostMetrics, history: list[PostMetrics]) -> Benchmar
 
     if len(candidates) < 5:
         result.warnings.append(
-            "São necessários pelo menos 5 posts comparáveis; 10 ou mais aumentam a confiança."
+            "São necessários pelo menos 5 posts comparáveis; 10 ou mais aumentam a força da evidência."
         )
         return result
 
@@ -115,11 +116,18 @@ def build_benchmark(target: PostMetrics, history: list[PostMetrics]) -> Benchmar
     target_value = target_values[primary]
     primary_values = [row[primary] for row in history_values if primary in row]
     ratio = target_value / medians[primary] if medians[primary] else None
+    stats = robust_expected_range(primary_values, target_value)
+
     result.primary_metric = primary
     result.target_value = target_value
     result.median_value = medians[primary]
     result.ratio_to_median = round(ratio, 4) if ratio is not None else None
-    result.percentile = _percentile(primary_values, target_value)
+    result.percentile = percentile(primary_values, target_value)
+    result.expected_low = stats["expected_low"]
+    result.expected_high = stats["expected_high"]
+    result.robust_z_score = stats["robust_z_score"]
+    result.baseline_dispersion_pct = stats["dispersion_pct"]
+    result.evidence_strength = stats["evidence_strength"]  # type: ignore[assignment]
 
     quality_ratios = [
         ratios[name]
@@ -132,39 +140,49 @@ def build_benchmark(target: PostMetrics, history: list[PostMetrics]) -> Benchmar
         if name in ratios
     ]
     quality_support = median(quality_ratios) if quality_ratios else None
+    z_score = result.robust_z_score or 0.0
+    pct = result.percentile or 0.0
+    high = result.expected_high
+    low = result.expected_low
 
-    if (
-        ratio is not None
-        and ratio >= 3
-        and quality_support is not None
-        and quality_support >= 1.15
-        and len(candidates) >= 8
-    ):
+    breakout_shape = (
+        len(candidates) >= 8
+        and high is not None
+        and target_value > high
+        and z_score >= 2.5
+        and pct >= 90
+        and ratio is not None
+        and ratio >= 1.5
+    )
+    if breakout_shape and quality_support is not None and quality_support >= 1.10:
         result.status = "BREAKOUT"
-        result.label = "Desempenho fora da curva no próprio perfil, sustentado por sinal de qualidade"
-    elif ratio is not None and ratio >= 1.5:
+        result.label = (
+            "Resultado fora do intervalo esperado do próprio perfil e sustentado por sinal de qualidade"
+        )
+    elif high is not None and (target_value > high or z_score >= 1.5 or pct >= 85):
         result.status = "ACIMA_DO_TÍPICO"
-        result.label = "Acima do desempenho típico do próprio perfil"
-    elif ratio is not None and ratio < 0.75:
+        result.label = "Acima do intervalo típico estimado para o próprio perfil"
+        if breakout_shape and quality_support is None:
+            result.warnings.append(
+                "O volume está fora da curva, mas faltam métricas de qualidade para classificar breakout."
+            )
+    elif low is not None and (target_value < low or z_score <= -1.5 or pct <= 15):
         result.status = "ABAIXO_DO_TÍPICO"
-        result.label = "Abaixo do desempenho típico do próprio perfil"
+        result.label = "Abaixo do intervalo típico estimado para o próprio perfil"
     else:
         result.status = "TÍPICO"
-        result.label = "Dentro da faixa típica do próprio perfil"
+        result.label = "Dentro do intervalo esperado do próprio perfil"
 
-    if result.status == "BREAKOUT" and quality_support is None:
-        result.status = "ACIMA_DO_TÍPICO"
-        result.label = "Alcance fora da curva, mas sem métrica de qualidade para confirmar breakout"
+    if len(primary_values) < 8:
+        result.evidence_strength = "FRACA"
+        result.warnings.append(
+            "A classificação usa uma amostra pequena; trate o intervalo esperado como orientação, não como previsão estável."
+        )
     return result
 
 
 def summarize_profile(history: list[PostMetrics]) -> dict[str, object]:
-    """Describe the profile history without attributing causality.
-
-    The summary helps the strategist see whether one format, topic, hook, or CTA is
-    repeatedly associated with stronger results. Groups with a single post remain
-    visible but are explicitly too small for a pattern claim.
-    """
+    """Describe the profile history without attributing causality."""
 
     if not history:
         return {"posts": 0, "warning": "Nenhum histórico do perfil foi fornecido."}
@@ -179,11 +197,11 @@ def summarize_profile(history: list[PostMetrics]) -> dict[str, object]:
         for name, posts in groups.items():
             views = [post.views for post in posts if post.views is not None]
             reach = [post.reach for post in posts if post.reach is not None]
-            share_rates = [
-                derive_metrics(post).get("share_rate_by_views_pct")
-                for post in posts
-                if derive_metrics(post).get("share_rate_by_views_pct") is not None
-            ]
+            share_rates: list[float] = []
+            for post in posts:
+                value = derive_metrics(post).get("share_rate_by_views_pct")
+                if value is not None:
+                    share_rates.append(value)
             rows.append(
                 {
                     "name": name,
@@ -234,6 +252,7 @@ def summarize_profile(history: list[PostMetrics]) -> dict[str, object]:
             for post in top
         ],
         "interpretation_rule": (
-            "Associações com menos de 5 posts são amostra pequena; diferenças observadas não provam que o atributo causou o resultado."
+            "Associações com menos de 5 posts são amostra pequena; diferenças observadas não provam causalidade. "
+            "A classificação geral usa intervalo robusto do próprio perfil, não limiares universais de viralização."
         ),
     }
