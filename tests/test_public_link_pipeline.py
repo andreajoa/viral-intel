@@ -1,3 +1,5 @@
+# ruff: noqa: I001
+
 import pathlib
 import tempfile
 import unittest
