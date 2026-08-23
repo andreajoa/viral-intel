@@ -1,0 +1,326 @@
+name: Cloudflare Production Activation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - cloudflare-activate
+
+permissions:
+  contents: read
+
+concurrency:
+  group: viral-intel-cloudflare-production
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  VIRAL_INTEL_MEMORY_SECRET: ${{ secrets.VIRAL_INTEL_MEMORY_SECRET }}
+  VIRAL_INTEL_APP_PASSWORD: ${{ secrets.VIRAL_INTEL_APP_PASSWORD }}
+  GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+  INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+  INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
+
+jobs:
+  deploy:
+    name: D1 -> staging -> production
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Baixar codigo validado
+        uses: actions/checkout@v6
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validar credenciais obrigatorias sem exibir valores
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID VIRAL_INTEL_MEMORY_SECRET VIRAL_INTEL_APP_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name nao esta configurado como GitHub Secret."
+              missing=1
+            fi
+          done
+          if [ -z "${GOOGLE_API_KEY:-}${OPENAI_API_KEY:-}${ANTHROPIC_API_KEY:-}" ]; then
+            echo "::error::Configure pelo menos um provedor de IA: GOOGLE_API_KEY, OPENAI_API_KEY ou ANTHROPIC_API_KEY."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          if [ "${#VIRAL_INTEL_MEMORY_SECRET}" -lt 24 ]; then
+            echo "::error::VIRAL_INTEL_MEMORY_SECRET deve ter pelo menos 24 caracteres."
+            exit 1
+          fi
+          if [ "${#VIRAL_INTEL_APP_PASSWORD}" -lt 16 ]; then
+            echo "::error::VIRAL_INTEL_APP_PASSWORD deve ter pelo menos 16 caracteres."
+            exit 1
+          fi
+
+      - name: Confirmar website principal antes de qualquer deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in \
+            "https://andre-almeida.online/" \
+            "https://andre-almeida.online/pt-BR" \
+            "https://andre-almeida.online/en"; do
+            code=$(curl --location --silent --show-error --output /tmp/site.html --write-out '%{http_code}' --max-time 30 "$url")
+            if [ "$code" -lt 200 ] || [ "$code" -ge 400 ]; then
+              echo "::error::Website principal nao esta saudavel antes do deploy: $url HTTP $code"
+              exit 1
+            fi
+            echo "Preflight OK: $url -> HTTP $code"
+          done
+
+      - name: Instalar Wrangler da memoria
+        working-directory: infra/cloudflare-memory
+        run: npm install --no-audit --no-fund
+
+      - name: Criar ou reutilizar D1 e gerar config runtime
+        id: d1
+        working-directory: infra/cloudflare-memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          list_db() {
+            npx wrangler d1 list --json | python -c 'import json,sys; rows=json.load(sys.stdin); print(next(((r.get("uuid") or r.get("id") or "") for r in rows if r.get("name")=="viral-intel-memory"), ""))'
+          }
+
+          DB_ID=$(list_db)
+          if [ -z "$DB_ID" ]; then
+            echo "Criando D1 viral-intel-memory..."
+            npx wrangler d1 create viral-intel-memory --location=enam
+            DB_ID=$(list_db)
+          fi
+          if [ -z "$DB_ID" ]; then
+            echo "::error::Nao foi possivel resolver o UUID do D1 viral-intel-memory."
+            exit 1
+          fi
+
+          python - "$DB_ID" <<'PY'
+          from pathlib import Path
+          import sys
+          db_id = sys.argv[1]
+          source = Path("wrangler.production.jsonc").read_text()
+          placeholder = "00000000-0000-0000-0000-000000000000"
+          if placeholder not in source:
+              raise SystemExit("placeholder do database_id nao encontrado")
+          Path("wrangler.runtime.jsonc").write_text(source.replace(placeholder, db_id))
+          PY
+          echo "D1 resolvido e config runtime criada."
+
+      - name: Preparar segredo HMAC da memoria
+        working-directory: infra/cloudflare-memory
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          with open('.memory-secrets.json', 'w') as f:
+              json.dump({'API_SECRET': os.environ['VIRAL_INTEL_MEMORY_SECRET']}, f)
+          PY
+          chmod 600 .memory-secrets.json
+
+      - name: Publicar Worker de memoria e aplicar migrations
+        working-directory: infra/cloudflare-memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.runtime.jsonc --secrets-file .memory-secrets.json
+          npx wrangler d1 migrations apply viral-intel-memory --remote --config wrangler.runtime.jsonc
+          rm -f .memory-secrets.json
+
+      - name: Validar memoria persistente
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 20 https://vi-memory.andre-almeida.online/health | tee /tmp/memory-health.json | grep -q '"ok":true'; then
+              ok=1
+              break
+            fi
+            sleep 4
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Worker de memoria nao ficou saudavel."
+            exit 1
+          fi
+
+      - name: Instalar Wrangler do app Cloudflare
+        working-directory: infra/cloudflare-app
+        run: npm install --no-audit --no-fund
+
+      - name: Preparar secrets do app sem imprimir valores
+        working-directory: infra/cloudflare-app
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          names = [
+              'VIRAL_INTEL_BASIC_PASSWORD',
+              'CLOUDFLARE_MEMORY_SECRET',
+              'GOOGLE_API_KEY',
+              'OPENAI_API_KEY',
+              'ANTHROPIC_API_KEY',
+              'APIFY_API_TOKEN',
+              'INSTAGRAM_ACCESS_TOKEN',
+              'INSTAGRAM_USER_ID',
+          ]
+          source = {
+              'VIRAL_INTEL_BASIC_PASSWORD': os.environ.get('VIRAL_INTEL_APP_PASSWORD', ''),
+              'CLOUDFLARE_MEMORY_SECRET': os.environ.get('VIRAL_INTEL_MEMORY_SECRET', ''),
+              'GOOGLE_API_KEY': os.environ.get('GOOGLE_API_KEY', ''),
+              'OPENAI_API_KEY': os.environ.get('OPENAI_API_KEY', ''),
+              'ANTHROPIC_API_KEY': os.environ.get('ANTHROPIC_API_KEY', ''),
+              'APIFY_API_TOKEN': os.environ.get('APIFY_API_TOKEN', ''),
+              'INSTAGRAM_ACCESS_TOKEN': os.environ.get('INSTAGRAM_ACCESS_TOKEN', ''),
+              'INSTAGRAM_USER_ID': os.environ.get('INSTAGRAM_USER_ID', ''),
+          }
+          payload = {name: source.get(name, '') for name in names if source.get(name, '')}
+          with open('.app-secrets.json', 'w') as f:
+              json.dump(payload, f)
+          PY
+          chmod 600 .app-secrets.json
+
+      - name: Publicar staging isolado
+        working-directory: infra/cloudflare-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.staging.jsonc --secrets-file .app-secrets.json --containers-rollout immediate
+
+      - name: Smoke test completo do staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          EDGE="https://viral-intel-staging.andre-almeida.online/viral-intel/_edge-health"
+          APP="https://viral-intel-staging.andre-almeida.online/viral-intel/_stcore/health"
+          PAGE="https://viral-intel-staging.andre-almeida.online/viral-intel/"
+
+          ok=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --max-time 20 "$EDGE" | grep -q '"ok":true' \
+              && curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$APP" >/dev/null; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::Staging nao ficou saudavel; producao NAO sera promovida."
+            exit 1
+          fi
+
+          curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$PAGE" >/tmp/viral-intel-staging.html
+          test -s /tmp/viral-intel-staging.html
+
+      - name: Testar WebSocket do Streamlit no staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet websocket-client
+          python - <<'PY'
+          import base64, os
+          import websocket
+
+          password = os.environ['VIRAL_INTEL_APP_PASSWORD']
+          token = base64.b64encode(f'andre:{password}'.encode()).decode()
+          ws = websocket.create_connection(
+              'wss://viral-intel-staging.andre-almeida.online/viral-intel/_stcore/stream',
+              header=[f'Authorization: Basic {token}'],
+              timeout=30,
+              origin='https://viral-intel-staging.andre-almeida.online',
+          )
+          ws.close()
+          print('WebSocket staging OK')
+          PY
+
+      - name: Verificar novamente website antes da promocao
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 30 https://andre-almeida.online/ >/dev/null
+          curl --fail --silent --show-error --location --max-time 30 https://andre-almeida.online/pt-BR >/dev/null
+          curl --fail --silent --show-error --location --max-time 30 https://andre-almeida.online/en >/dev/null
+
+      - name: Promover somente /viral-intel para producao
+        working-directory: infra/cloudflare-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.production.jsonc --secrets-file .app-secrets.json --containers-rollout immediate
+          rm -f .app-secrets.json
+
+      - name: Validar producao e garantir que o website nao quebrou
+        shell: bash
+        run: |
+          set -euo pipefail
+          EDGE="https://andre-almeida.online/viral-intel/_edge-health"
+          APP="https://andre-almeida.online/viral-intel/_stcore/health"
+          PAGE="https://andre-almeida.online/viral-intel/"
+
+          ok=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --max-time 20 "$EDGE" | grep -q '"ok":true' \
+              && curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$APP" >/dev/null; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::A rota /viral-intel nao ficou saudavel em producao."
+            exit 1
+          fi
+
+          curl --fail --silent --show-error --max-time 30 --user "andre:${VIRAL_INTEL_APP_PASSWORD}" "$PAGE" >/tmp/viral-intel-production.html
+          test -s /tmp/viral-intel-production.html
+
+          for url in \
+            "https://andre-almeida.online/" \
+            "https://andre-almeida.online/pt-BR" \
+            "https://andre-almeida.online/en"; do
+            code=$(curl --location --silent --show-error --output /tmp/site-after.html --write-out '%{http_code}' --max-time 30 "$url")
+            if [ "$code" -lt 200 ] || [ "$code" -ge 400 ]; then
+              echo "::error::Website principal falhou apos a promocao: $url HTTP $code"
+              exit 1
+            fi
+            echo "Website preservado: $url -> HTTP $code"
+          done
+
+      - name: Testar WebSocket em producao
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, os
+          import websocket
+
+          password = os.environ['VIRAL_INTEL_APP_PASSWORD']
+          token = base64.b64encode(f'andre:{password}'.encode()).decode()
+          ws = websocket.create_connection(
+              'wss://andre-almeida.online/viral-intel/_stcore/stream',
+              header=[f'Authorization: Basic {token}'],
+              timeout=30,
+              origin='https://andre-almeida.online',
+          )
+          ws.close()
+          print('WebSocket production OK')
+          PY
+
+      - name: Resumo final
+        run: |
+          echo "Viral Intel ativado em https://andre-almeida.online/viral-intel/"
+          echo "Memoria D1 ativa em https://vi-memory.andre-almeida.online/health"
+          echo "Website principal verificado antes e depois da promocao."
