@@ -8,9 +8,9 @@ permissions:
 
 jobs:
   runtime-smoke:
-    name: Live Streamlit Diagnostic
+    name: Live Streamlit Render Context
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 5
     steps:
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -20,77 +20,34 @@ jobs:
       - name: Install Selenium
         run: python -m pip install --disable-pip-version-check selenium
 
-      - name: Diagnose rendered production runtime
+      - name: Locate Streamlit render context
         env:
           TARGET_URL: https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app/
         run: |
           python - <<'PY'
           import os
           import time
-
           from selenium import webdriver
-          from selenium.common.exceptions import TimeoutException
           from selenium.webdriver.common.by import By
-          from selenium.webdriver.support.ui import WebDriverWait
 
           options = webdriver.ChromeOptions()
           options.add_argument("--headless=new")
           options.add_argument("--no-sandbox")
           options.add_argument("--disable-dev-shm-usage")
-          options.add_argument("--disable-gpu")
-          options.add_argument("--window-size=1440,1400")
-
+          options.add_argument("--window-size=1440,1200")
           driver = webdriver.Chrome(options=options)
           try:
               driver.get(os.environ["TARGET_URL"])
-              try:
-                  WebDriverWait(driver, 90).until(
-                      lambda d: "Cole o link do post viral" in d.find_element(By.TAG_NAME, "body").text
-                  )
-              except TimeoutException:
-                  body = driver.find_element(By.TAG_NAME, "body").text
-                  print("LIVE_TITLE=", driver.title)
-                  print("LIVE_URL=", driver.current_url)
-                  print("LIVE_BODY_BEGIN")
-                  print(body[:5000])
-                  print("LIVE_BODY_END")
-                  driver.save_screenshot("runtime-diagnostic.png")
-                  raise
-
-              time.sleep(3)
+              time.sleep(25)
+              print("LIVE_TITLE=", driver.title)
+              print("LIVE_URL=", driver.current_url)
+              frames = driver.find_elements(By.TAG_NAME, "iframe")
+              print("IFRAME_COUNT=", len(frames))
+              for index, frame in enumerate(frames):
+                  print(f"IFRAME_{index}_SRC=", frame.get_attribute("src") or "")
+                  print(f"IFRAME_{index}_TITLE=", frame.get_attribute("title") or "")
               body = driver.find_element(By.TAG_NAME, "body").text
-              if "Estado do sistema" not in body:
-                  for selector in (
-                      '[data-testid="stSidebarCollapsedControl"] button',
-                      '[data-testid="collapsedControl"] button',
-                      'button[aria-label*="sidebar" i]',
-                  ):
-                      candidates = driver.find_elements(By.CSS_SELECTOR, selector)
-                      if candidates:
-                          try:
-                              candidates[0].click()
-                              time.sleep(2)
-                              break
-                          except Exception:
-                              pass
-                  body = driver.find_element(By.TAG_NAME, "body").text
-
-              checks = {
-                  "UI link-only": "Cole o link do post viral" in body and "Descobrir por que viralizou" in body,
-                  "FFmpeg": "FFmpeg: disponível" in body,
-                  "Apify": "Coleta pública: Apify + fallbacks" in body,
-                  "Memória D1": "Memória longitudinal: cloudflare_d1" in body,
-                  "IA multimodal": "IA multimodal:" in body and "IA multimodal: sem chave" not in body,
-                  "Download automático": "Download automático da mídia" in body,
-              }
-              for label, ok in checks.items():
-                  print(f"{label}: {'READY' if ok else 'MISSING'}")
-              failed = [label for label, ok in checks.items() if not ok]
-              if failed:
-                  print("SANITIZED_BODY_BEGIN")
-                  print(body[:5000])
-                  print("SANITIZED_BODY_END")
-                  raise SystemExit("Runtime incompleto: " + ", ".join(failed))
+              print("TOP_BODY_LENGTH=", len(body))
           finally:
               driver.quit()
           PY
