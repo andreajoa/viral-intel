@@ -59,8 +59,35 @@ def _normalize_comment(comment: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _normalize_history_row(post: dict[str, Any]) -> dict[str, Any]:
+    """Keep only public fields needed for a creator-relative baseline."""
+
+    return {
+        "post_id": str(_first_present(post.get("id"), post.get("shortCode")) or "") or None,
+        "url": _first_present(post.get("url"), post.get("inputUrl")),
+        "caption": post.get("caption"),
+        "views": _first_present(
+            post.get("videoPlayCount"),
+            post.get("videoViewCount"),
+            post.get("playCount"),
+            post.get("viewCount"),
+            post.get("viewsCount"),
+        ),
+        "likes": _first_present(post.get("likesCount"), post.get("likeCount")),
+        "comments": _first_present(post.get("commentsCount"), post.get("commentCount")),
+        "shares": _first_present(post.get("sharesCount"), post.get("shareCount"), post.get("reshareCount")),
+        "reposts": _first_present(post.get("repostsCount"), post.get("repostCount")),
+        "timestamp": _first_present(post.get("timestamp"), post.get("takenAt"), post.get("createdAt")),
+        "type": _first_present(post.get("type"), post.get("mediaType")),
+        "media_product_type": _first_present(post.get("productType"), post.get("mediaProductType")),
+        "videoUrl": post.get("videoUrl"),
+        "displayUrl": post.get("displayUrl"),
+        "videoDuration": _first_present(post.get("videoDuration"), post.get("duration")),
+    }
+
+
 class ApifyInstagramCollector:
-    """Read public post metrics and comments using a configured Apify token."""
+    """Read public post metrics, comments and recent creator posts using Apify."""
 
     def __init__(
         self,
@@ -91,6 +118,13 @@ class ApifyInstagramCollector:
         if not any(segment in parsed.path for segment in ("/p/", "/reel/", "/tv/", "/share/")):
             raise ValueError("Informe o link direto de um post, Reel ou vídeo do Instagram.")
         return url.strip()
+
+    @staticmethod
+    def _profile_url(username: str) -> str:
+        clean = username.strip().lstrip("@").split("?", 1)[0].strip("/")
+        if not clean or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._" for character in clean):
+            raise ValueError("Username público inválido para coleta do histórico.")
+        return f"https://www.instagram.com/{clean}/"
 
     def _safe_error(self, exc: Exception) -> str:
         detail = str(exc)
@@ -137,7 +171,7 @@ class ApifyInstagramCollector:
         if not rows:
             raise RuntimeError("Nenhum dado público foi retornado para esta publicação.")
         canonical = url.rstrip("/")
-        matching = next(
+        return next(
             (
                 row
                 for row in rows
@@ -145,7 +179,6 @@ class ApifyInstagramCollector:
             ),
             rows[0],
         )
-        return matching
 
     def _fetch_comments(self, url: str) -> list[dict[str, Any]]:
         if self.max_comments <= 0:
@@ -165,6 +198,45 @@ class ApifyInstagramCollector:
             if normalized:
                 comments.append(normalized)
         return comments[: self.max_comments]
+
+    def collect_creator_history(self, username: str, limit: int = 30) -> dict[str, Any]:
+        """Collect recent public posts for a creator-relative breakout baseline."""
+
+        if not self.configured:
+            return {
+                "source_ok": False,
+                "error": "APIFY_API_TOKEN não configurado.",
+                "posts": [],
+            }
+        try:
+            profile_url = self._profile_url(username)
+            bounded_limit = max(5, min(int(limit), 100))
+            rows = self._run(
+                {
+                    "directUrls": [profile_url],
+                    "resultsType": "posts",
+                    "resultsLimit": bounded_limit,
+                    "searchLimit": 1,
+                }
+            )
+            posts = [_normalize_history_row(row) for row in rows[:bounded_limit]]
+            return {
+                "source_ok": bool(posts),
+                "collection_source": "apify/instagram-public-profile",
+                "username": username.strip().lstrip("@"),
+                "posts": posts,
+                "count": len(posts),
+                "source_notes": [
+                    "Baseline montado com publicações públicas recentes do mesmo criador.",
+                    "O número atual de seguidores não representa necessariamente o tamanho da conta na data de cada post."
+                ],
+            }
+        except Exception as exc:
+            return {
+                "source_ok": False,
+                "error": self._safe_error(exc),
+                "posts": [],
+            }
 
     def collect(self, url: str, include_comments: bool = True) -> dict[str, Any]:
         if not self.configured:
@@ -236,6 +308,7 @@ class ApifyInstagramCollector:
                 "comments_count": _first_present(post.get("commentsCount"), post.get("commentCount")),
                 "shares": shares,
                 "reposts": reposts,
+                "duration_seconds": _first_present(post.get("videoDuration"), post.get("duration")),
                 "published_at": _as_datetime(
                     _first_present(post.get("timestamp"), post.get("takenAt"), post.get("createdAt"))
                 ),
