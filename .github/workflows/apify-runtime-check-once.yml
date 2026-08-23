@@ -63,3 +63,5 @@ jobs:
           finally:
               driver.quit()
           PY
+
+# rerun marker: Streamlit secret saved by user
