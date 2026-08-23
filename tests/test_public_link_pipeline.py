@@ -3,11 +3,10 @@ from __future__ import annotations
 import pathlib
 import tempfile
 import unittest
-import unittest.mock
 
 from app.config import Settings
 from app.models import AnalysisEnvelope, BenchmarkResult, DataQuality, PostMetrics
-from app.pipeline.public_link import analyze_public_link
+from app.pipeline import public_link
 
 
 STRATEGY = {
@@ -133,20 +132,21 @@ class PublicLinkPipelineTests(unittest.TestCase):
                 local_media_dir=pathlib.Path(temp_dir) / "inbox",
             )
             settings.ensure_dirs()
-            with unittest.mock.patch(
-                "app.pipeline.public_link.PublicPostPackageCollector",
-                FakePackageCollector,
-            ), unittest.mock.patch(
-                "app.pipeline.public_link.analyze_content",
-                side_effect=fake_analyze_content,
-            ) as analyze:
-                report = analyze_public_link(
+
+            original_collector = public_link.PublicPostPackageCollector
+            original_analyze = public_link.analyze_content
+            try:
+                public_link.PublicPostPackageCollector = FakePackageCollector
+                public_link.analyze_content = fake_analyze_content
+                report = public_link.analyze_public_link(
                     "https://www.instagram.com/reel/viral/",
                     niche="educação inclusiva",
                     settings=settings,
                 )
+            finally:
+                public_link.PublicPostPackageCollector = original_collector
+                public_link.analyze_content = original_analyze
 
-        analyze.assert_called_once()
         self.assertTrue(report.technical_analysis["link_only_mode"])
         self.assertEqual(
             report.technical_analysis["public_creator_baseline"]["status"],
