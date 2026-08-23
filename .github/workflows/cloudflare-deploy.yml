@@ -66,7 +66,7 @@ jobs:
             exit 1
           fi
 
-      - name: Registrar baseline do website ao vivo
+      - name: Registrar fingerprint estrutural do website ao vivo
         shell: bash
         run: |
           set -euo pipefail
@@ -75,10 +75,8 @@ jobs:
             echo "::error::Website principal nao esta saudavel antes do deploy: HTTP $code"
             exit 1
           fi
-          sha=$(sha256sum /tmp/site-before.html | awk '{print $1}')
-          bytes=$(wc -c </tmp/site-before.html | tr -d ' ')
-          echo "SITE_BEFORE_SHA=$sha" >> "$GITHUB_ENV"
-          echo "SITE_BEFORE_BYTES=$bytes" >> "$GITHUB_ENV"
+          fingerprint=$(python cloud/site_fingerprint.py fingerprint /tmp/site-before.html --host andre-almeida.online)
+          echo "SITE_BEFORE_FINGERPRINT=$fingerprint" >> "$GITHUB_ENV"
 
       - name: Instalar Wrangler da memoria
         working-directory: infra/cloudflare-memory
@@ -217,14 +215,16 @@ jobs:
             exit 1
           fi
 
-      - name: Confirmar homepage identica antes da promocao
+      - name: Confirmar homepage estruturalmente identica antes da promocao
         shell: bash
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --max-time 30 https://andre-almeida.online/ >/tmp/site-pre-promote.html
-          current_sha=$(sha256sum /tmp/site-pre-promote.html | awk '{print $1}')
-          if [ "$current_sha" != "$SITE_BEFORE_SHA" ]; then
-            echo "::error::A homepage mudou durante staging. Producao NAO sera promovida."
+          if ! python cloud/site_fingerprint.py compare /tmp/site-pre-promote.html \
+            --host andre-almeida.online \
+            --baseline-json "$SITE_BEFORE_FINGERPRINT" \
+            --max-byte-delta-pct 3; then
+            echo "::error::A estrutura/conteudo da homepage mudou durante staging. Producao NAO sera promovida."
             exit 1
           fi
 
@@ -265,10 +265,11 @@ jobs:
           grep -q 'viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app' /tmp/viral-intel-production.html
           grep -q 'embed=true' /tmp/viral-intel-production.html
           curl --fail --silent --show-error --location --max-time 30 https://andre-almeida.online/ >/tmp/site-after.html
-          after_sha=$(sha256sum /tmp/site-after.html | awk '{print $1}')
-          after_bytes=$(wc -c </tmp/site-after.html | tr -d ' ')
-          if [ "$after_sha" != "$SITE_BEFORE_SHA" ] || [ "$after_bytes" != "$SITE_BEFORE_BYTES" ]; then
-            echo "::error::A homepage mudou apos a promocao."
+          if ! python cloud/site_fingerprint.py compare /tmp/site-after.html \
+            --host andre-almeida.online \
+            --baseline-json "$SITE_BEFORE_FINGERPRINT" \
+            --max-byte-delta-pct 3; then
+            echo "::error::A estrutura/conteudo da homepage mudou apos a promocao."
             exit 1
           fi
 
@@ -278,4 +279,5 @@ jobs:
           echo "D1 Free ativo em https://vi-memory.andre-almeida.online/health"
           echo "Origin Streamlit: https://viral-intel-xcpaef9v2esxkyz5ifgvke.streamlit.app/"
           echo "Modo: shell autenticado no Worker Free + embed oficial do Streamlit Community Cloud."
+          echo "Homepage preservada por fingerprint estrutural estavel, sem depender de tokens HTML dinamicos."
           echo "IMPORTANTE: configure CLOUDFLARE_MEMORY_URL e CLOUDFLARE_MEMORY_SECRET nos Secrets do Streamlit para ativar memoria duravel no app Python."
