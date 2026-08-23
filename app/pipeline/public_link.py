@@ -21,6 +21,7 @@ from app.models import AnalysisEnvelope, ContentFormat, Platform
 from app.online.public_post_package import PublicPostPackageCollector
 from app.pipeline.main import analyze_content
 from app.reporting.exporter import save_report
+from app.storage import create_intelligence_store
 
 
 def _platform_from_package(package: dict[str, Any], url: str) -> Platform:
@@ -97,6 +98,10 @@ def _profile_key(package: dict[str, Any], platform: Platform) -> str:
     return ""
 
 
+def _post_key(report: AnalysisEnvelope) -> str:
+    return report.metrics.post_id or report.metrics.post_url or report.report_id
+
+
 def _collection_quality(package: dict[str, Any]) -> dict[str, Any]:
     auto = dict(package.get("auto_collection") or {})
     signals = {
@@ -118,6 +123,32 @@ def _collection_quality(package: dict[str, Any]) -> dict[str, Any]:
         }
     )
     return auto
+
+
+def _persist_enriched_report(
+    report: AnalysisEnvelope,
+    *,
+    settings: Settings,
+    profile_key: str,
+) -> None:
+    """Overwrite the earlier core snapshot with the fully enriched link-only envelope."""
+
+    if not settings.persistence_active or not profile_key:
+        return
+    try:
+        store = create_intelligence_store(settings)
+        post_key = _post_key(report)
+        store.save_report(report, profile_key=profile_key, post_key=post_key)
+        report.longitudinal = store.longitudinal_summary(
+            profile_key=profile_key,
+            post_key=post_key,
+        )
+        store.save_report(report, profile_key=profile_key, post_key=post_key)
+    except Exception as exc:
+        report.provider_errors.append(
+            "persistência do DNA viral: "
+            f"{type(exc).__name__}: {str(exc)[:200]}"
+        )
 
 
 def analyze_public_link(
@@ -152,6 +183,7 @@ def analyze_public_link(
 
         platform = _platform_from_package(package, clean_url)
         content_format = _format_from_package(package, clean_url)
+        profile_key = _profile_key(package, platform)
         history = public_history_to_posts(
             package.get("creator_history") or [],
             platform=platform,
@@ -173,7 +205,7 @@ def analyze_public_link(
             inspector=inspector,
             manual_comments=package.get("comments_sample") or [],
             manual_caption=str(package.get("caption") or ""),
-            profile_key=_profile_key(package, platform),
+            profile_key=profile_key,
         )
 
         baseline = build_public_creator_baseline(report.metrics, history)
@@ -210,6 +242,7 @@ def analyze_public_link(
             "attributed_follows",
             "ranking_weights",
         ]
+        _persist_enriched_report(report, settings=settings, profile_key=profile_key)
         save_report(report, settings.exports_dir)
         return report
     finally:
