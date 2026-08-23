@@ -17,11 +17,14 @@ _ENV_KEYS = (
     "ENABLE_TRANSCRIPTION",
     "ENABLE_PUBLIC_COLLECTION",
     "EPHEMERAL_MODE",
+    "ENABLE_PERSISTENCE",
     "GOOGLE_API_KEY",
     "GEMINI_API_KEY",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
     "APIFY_API_TOKEN",
+    "CLOUDFLARE_MEMORY_URL",
+    "CLOUDFLARE_MEMORY_SECRET",
 )
 
 
@@ -36,6 +39,8 @@ def _configure_cloud_test_environment(temp_dir: str) -> None:
         "OPENAI_API_KEY",
         "ANTHROPIC_API_KEY",
         "APIFY_API_TOKEN",
+        "CLOUDFLARE_MEMORY_URL",
+        "CLOUDFLARE_MEMORY_SECRET",
     ):
         os.environ.pop(key, None)
 
@@ -102,6 +107,39 @@ class CloudEntrypointTests(unittest.TestCase):
                 if name == "app" or name.startswith("app."):
                     sys.modules.pop(name, None)
             sys.modules.update(previous_app_modules)
+            _restore_environment(previous)
+            get_settings.cache_clear()
+
+    def test_cloud_entrypoint_refreshes_cached_secrets_and_persistence(self):
+        previous = {key: os.environ.get(key) for key in _ENV_KEYS}
+
+        try:
+            with tempfile.TemporaryDirectory(prefix="viral-intel-secrets-") as temp_dir:
+                _configure_cloud_test_environment(temp_dir)
+                os.environ["ENABLE_PERSISTENCE"] = "false"
+                get_settings.cache_clear()
+
+                stale_settings = get_settings()
+                self.assertEqual(stale_settings.apify_api_token, "")
+                self.assertFalse(stale_settings.persistence_active)
+
+                os.environ["APIFY_API_TOKEN"] = "test-apify-token"
+                os.environ["CLOUDFLARE_MEMORY_URL"] = "https://memory.example.test"
+                os.environ["CLOUDFLARE_MEMORY_SECRET"] = "test-memory-secret-value"
+
+                app = AppTest.from_file(
+                    str(ROOT / "cloud" / "streamlit_app.py"),
+                    default_timeout=50,
+                ).run()
+
+                refreshed = get_settings()
+                self.assertEqual(len(app.exception), 0)
+                self.assertEqual(len(app.error), 0)
+                self.assertEqual(refreshed.apify_api_token, "test-apify-token")
+                self.assertTrue(refreshed.persistence_active)
+                self.assertEqual(refreshed.persistence_backend, "cloudflare_d1")
+                self.assertEqual(os.environ.get("ENABLE_PERSISTENCE"), "true")
+        finally:
             _restore_environment(previous)
             get_settings.cache_clear()
 

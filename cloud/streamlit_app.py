@@ -40,6 +40,16 @@ def _purge_stale_app_modules() -> bool:
     return True
 
 
+def _refresh_settings_cache() -> None:
+    """Force settings to reread environment/secrets on every Streamlit rerun."""
+
+    try:
+        from app.config import get_settings
+    except Exception:
+        return
+    get_settings.cache_clear()
+
+
 _purge_stale_app_modules()
 
 is_local_execution = os.getenv("VIRAL_INTEL_EXECUTION", "").strip().lower() == "local"
@@ -51,13 +61,17 @@ if not is_local_execution:
     remote_memory = bool(
         os.getenv("CLOUDFLARE_MEMORY_URL", "").strip() and os.getenv("CLOUDFLARE_MEMORY_SECRET", "").strip()
     )
-    os.environ.setdefault("ENABLE_PERSISTENCE", "true" if remote_memory else "false")
+    # This must be recomputed on every rerun. Streamlit can update Secrets without
+    # replacing the Python process, so setdefault would preserve a stale false value.
+    os.environ["ENABLE_PERSISTENCE"] = "true" if remote_memory else "false"
     os.environ.setdefault("MAX_UPLOAD_MB", "100")
     os.environ.setdefault("COMMAND_TIMEOUT_SECONDS", "120")
     os.environ.setdefault("AUTO_DOWNLOAD_PUBLIC_MEDIA", "true")
     os.environ.setdefault("PUBLIC_CREATOR_HISTORY_LIMIT", "30")
     os.environ.setdefault("MAX_PUBLIC_MEDIA_MB", "200")
     os.environ.setdefault("AI_PROVIDER", "auto")
+
+_refresh_settings_cache()
 
 try:
     runpy.run_path(str(ROOT / "app" / "ui" / "dashboard_link_only.py"), run_name="__main__")
