@@ -1,6 +1,6 @@
 from app.config import Settings
 from app.models import AnalysisEnvelope, BenchmarkResult, DataQuality, PostMetrics
-from app.pipeline import public_link
+from app.pipeline.public_link import analyze_public_link
 
 
 STRATEGY = {
@@ -121,10 +121,16 @@ def fake_analyze_content(**kwargs):
 def test_url_only_enriches_report_with_breakout_dna_and_ai_prompt(tmp_path, monkeypatch):
     settings = Settings(data_dir=tmp_path, local_media_dir=tmp_path / "inbox")
     settings.ensure_dirs()
-    monkeypatch.setattr(public_link, "PublicPostPackageCollector", FakePackageCollector)
-    monkeypatch.setattr(public_link, "analyze_content", fake_analyze_content)
+    monkeypatch.setattr(
+        "app.pipeline.public_link.PublicPostPackageCollector",
+        FakePackageCollector,
+    )
+    monkeypatch.setattr(
+        "app.pipeline.public_link.analyze_content",
+        fake_analyze_content,
+    )
 
-    report = public_link.analyze_public_link(
+    report = analyze_public_link(
         "https://www.instagram.com/reel/viral/",
         niche="educação inclusiva",
         settings=settings,
